@@ -1,0 +1,54 @@
+{
+  "name": "trips",
+  "version": "1",
+  "description": "Fishing trips with hauls and samples - demonstrates multi-record CSV, hierarchy rules, and aggregates",
+  "shape": {
+    "name": "TR",
+    "fields": [
+      { "name": "RecordType" },
+      { "name": "TripId" },
+      { "name": "Vessel" },
+      { "name": "DepartureDate" },
+      { "name": "TotalWeight" }
+    ],
+    "children": [
+      {
+        "name": "HL",
+        "required": true,
+        "fields": [
+          { "name": "RecordType" },
+          { "name": "HaulNo" },
+          { "name": "Gear" },
+          { "name": "Weight" }
+        ],
+        "children": [
+          {
+            "name": "SA",
+            "fields": [
+              { "name": "RecordType" },
+              { "name": "Species" },
+              { "name": "SampleNo" }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "source": { "csv": { "mode": "multiRecord" } },
+  "rules": [
+    { "id": "TR-01", "entity": "TR", "field": "TripId", "check": { "type": "required" } },
+    { "id": "TR-02", "entity": "TR", "field": "TripId", "check": { "type": "regex", "pattern": "^T-\\d+$" } },
+    { "id": "TR-03", "entity": "TR", "check": { "type": "unique", "fields": [ "TripId" ] } },
+    { "id": "TR-04", "entity": "TR", "field": "DepartureDate", "check": { "type": "dataType", "kind": "date" } },
+    { "id": "HL-01", "entity": "HL", "field": "Weight", "check": { "type": "dataType", "kind": "decimal" } },
+    { "id": "HL-02", "entity": "HL", "field": "Gear", "check": { "type": "inList", "values": [ "OTB", "PTM", "GNS" ] } },
+    { "id": "HL-03", "entity": "HL", "check": { "type": "unique", "fields": [ "HaulNo" ], "scope": "parent" } },
+    { "id": "HL-04", "entity": "HL", "field": "Weight",
+      "check": { "type": "compare", "op": "le", "otherField": "parent.TotalWeight" } },
+    { "id": "TR-05", "entity": "TR", "field": "TotalWeight",
+      "check": { "type": "aggregate", "childEntity": "HL", "childField": "Weight",
+                 "function": "sum", "deviationPercent": 5 },
+      "severity": "warning" },
+    { "id": "SA-01", "entity": "SA", "field": "Species", "check": { "type": "length", "min": 3, "max": 3 } }
+  ]
+}

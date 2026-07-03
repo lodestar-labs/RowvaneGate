@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Rowvane.Gate.Core\Rowvane.Gate.Core.csproj" />
+    <ProjectReference Include="..\Rowvane.Gate.Readers\Rowvane.Gate.Readers.csproj" />
+    <ProjectReference Include="..\Rowvane.Gate.Schemas\Rowvane.Gate.Schemas.csproj" />
+    <ProjectReference Include="..\Rowvane.Gate.Engine\Rowvane.Gate.Engine.csproj" />
+    <ProjectReference Include="..\Rowvane.Gate.Analytics\Rowvane.Gate.Analytics.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
