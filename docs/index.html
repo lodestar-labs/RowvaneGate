@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rowvane Gate — validate any data file, declaratively</title>
+<meta name="description" content="Rowvane Gate validates multi-record CSV, fixed-width, XML, and JSON files against one declarative ruleset: hierarchy checks, cross-field rules, XSD and JSON Schema import, DuckDB-powered SQL rules and profiling.">
+<style>
+  :root {
+    --ink: #1f2933; --muted: #52606d; --line: #d9e2ec; --accent: #0f766e;
+    --accent-soft: #f0fdfa; --panel: #f8fafc; --dark: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); line-height: 1.6; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 28px; }
+  a { color: var(--accent); }
+
+  .hero { background: linear-gradient(160deg, #0f172a 0%, #134e4a 70%, #0f766e 160%); color: #f8fafc; padding: 72px 0 64px; }
+  .hero h1 { font-size: 2.6rem; margin: 0 0 14px; letter-spacing: -0.02em; line-height: 1.15; }
+  .hero p.lede { font-size: 1.2rem; color: #cbd5e1; max-width: 720px; margin: 0 0 28px; }
+  .hero .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 11px 22px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+  .btn.primary { background: #fff; color: var(--dark); }
+  .btn.primary:hover { background: #e2e8f0; }
+  .btn.outline { border: 1px solid #64748b; color: #e2e8f0; }
+  .btn.outline:hover { border-color: #fff; color: #fff; }
+  .hero pre { background: rgba(2, 6, 23, 0.6); border: 1px solid #334155; margin-top: 34px; }
+
+  section { padding: 56px 0 8px; }
+  h2 { font-size: 1.6rem; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  @media (max-width: 860px) { .features { grid-template-columns: 1fr; } }
+  .feature { border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; background: #fff; }
+  .feature h3 { margin: 0 0 8px; font-size: 1.02rem; }
+  .feature p { margin: 0; font-size: 0.92rem; color: var(--muted); }
+
+  pre { background: var(--dark); color: #e2e8f0; padding: 18px 20px; border-radius: 10px; overflow-x: auto; font-size: 0.85rem; line-height: 1.55; }
+  code { font-family: Consolas, "Cascadia Code", monospace; }
+  p code, li code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .split { grid-template-columns: 1fr; } }
+  .split h3 { margin: 0 0 10px; font-size: 1.05rem; }
+
+  .links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 10px; }
+  @media (max-width: 640px) { .links { grid-template-columns: 1fr; } }
+  .link-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; text-decoration: none; display: block; }
+  .link-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .link-card strong { color: var(--ink); display: block; }
+  .link-card span { color: var(--muted); font-size: 0.88rem; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 64px; padding: 22px 0 40px; color: var(--muted); font-size: 0.88rem; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="wrap">
+    <h1>Validate any data file —<br>before it touches your systems.</h1>
+    <p class="lede">
+      Rowvane Gate checks the files organizations actually exchange — multi-record CSV,
+      fixed-width mainframe layouts, nested XML, JSON exports — against one declarative
+      ruleset, and returns structured findings with real line numbers, raw values, and
+      per-rule counts.
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/KadjiProjects/RowvaneGate">View on GitHub</a>
+      <a class="btn outline" href="ruleset-reference.html">Ruleset reference</a>
+      <a class="btn outline" href="architecture-overview.html">Architecture</a>
+    </div>
+    <pre><code>git clone https://github.com/KadjiProjects/RowvaneGate.git
+cd RowvaneGate
+dotnet run --project src/Rowvane.Gate.Api
+# register the sample ruleset, then validate the sample file
+curl -X PUT  http://localhost:5000/api/rulesets/trips --data-binary @samples/trips/trips.ruleset.json
+curl -X POST http://localhost:5000/api/validate/trips -F "file=@samples/trips/trips.csv"</code></pre>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>One ruleset replaces every hand-written file checker</h2>
+    <p class="sub">Declare the shape and the rules once; Gate enforces them for every format.</p>
+    <div class="features">
+      <div class="feature">
+        <h3>Every format, one vocabulary</h3>
+        <p>Field rules, cross-field and cross-level comparisons, conditionals, composite
+        uniqueness, parent-vs-children aggregates, row-count bounds — declared once in JSON,
+        enforced identically for CSV, XML, and JSON representations of the same data.</p>
+      </div>
+      <div class="feature">
+        <h3>Flat files, done properly</h3>
+        <p>Multi-record-type files with hierarchy reconstructed from record order; header
+        detection and positional mapping; fixed-width slicing; delimiter sniffing; RFC 4180
+        quoting with escaped quotes and embedded newlines.</p>
+      </div>
+      <div class="feature">
+        <h3>Schemas become rulesets</h3>
+        <p>Feed Gate an XSD or a JSON Schema and get an editable native ruleset — types,
+        required fields, enumerations, patterns, and facets become rules that then validate
+        <em>any</em> supported format, not just the schema's own.</p>
+      </div>
+      <div class="feature">
+        <h3>Findings, not strings</h3>
+        <p>Every violation carries rule id, severity, entity, field, line number, raw value,
+        and message. Reports add per-entity record counts and per-rule totals that are never
+        truncated — filter, aggregate, diff, render.</p>
+      </div>
+      <div class="feature">
+        <h3>An analytical escape hatch</h3>
+        <p>Embedded DuckDB powers column profiling for unfamiliar files and SQL rules —
+        any dataset-level check you can express as a query over the staged file, each
+        returned row becoming a finding.</p>
+      </div>
+      <div class="feature">
+        <h3>Streaming end to end</h3>
+        <p>One pass per file. Per-record rules fire as records arrive; dataset rules
+        accumulate and finalize at the end. Memory is bounded by one record subtree,
+        never the file — multi-gigabyte inputs are fine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap split">
+    <div>
+      <h3>You write this…</h3>
+<pre><code>{
+  "name": "trips",
+  "shape": {
+    "name": "TR",
+    "fields": [ { "name": "RecordType" }, { "name": "TripId" },
+                { "name": "TotalWeight" } ],
+    "children": [ { "name": "HL", "required": true,
+      "fields": [ { "name": "RecordType" },
+                  { "name": "HaulNo" }, { "name": "Weight" } ] } ]
+  },
+  "source": { "csv": { "mode": "multiRecord" } },
+  "rules": [
+    { "entity": "TR", "field": "TripId",
+      "check": { "type": "required" } },
+    { "entity": "TR",
+      "check": { "type": "unique", "fields": [ "TripId" ] } },
+    { "entity": "HL", "field": "Weight",
+      "check": { "type": "compare", "op": "le",
+                 "otherField": "parent.TotalWeight" } },
+    { "entity": "TR", "field": "TotalWeight",
+      "check": { "type": "aggregate", "childEntity": "HL",
+                 "childField": "Weight", "function": "sum",
+                 "deviationPercent": 5 } }
+  ]
+}</code></pre>
+    </div>
+    <div>
+      <h3>…and get this back</h3>
+<pre><code>{
+  "ruleset": "trips",
+  "source": "delivery.csv",
+  "format": "csv",
+  "recordsRead": 8231,
+  "recordCounts": { "TR": 412, "HL": 7819 },
+  "errorCount": 3,
+  "warningCount": 0,
+  "findingsByRule": { "R002": 1, "R003": 2 },
+  "findings": [
+    {
+      "ruleId": "R003",
+      "severity": "error",
+      "entity": "HL",
+      "field": "Weight",
+      "line": 4711,
+      "path": "HL",
+      "rawValue": "1200",
+      "message": "Value '1200' is not at most
+                  parent.TotalWeight (which is '1000')."
+    }
+  ],
+  "valid": false
+}</code></pre>
+      <p style="color:var(--muted); font-size:0.92rem;">
+        The same ruleset validates the same trips arriving as nested XML or a JSON array —
+        and an XSD or JSON Schema can generate the whole document for you.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Documentation</h2>
+    <div class="links">
+      <a class="link-card" href="ruleset-reference.html">
+        <strong>Ruleset reference</strong>
+        <span>Every property of the ruleset document: shape, source options, all eleven check types, the report format, schema import.</span>
+      </a>
+      <a class="link-card" href="recipes.html">
+        <strong>Recipes</strong>
+        <span>Multi-record exchange files, XSD contracts over non-XML data, JSON exports, fixed-width layouts, SQL rules, CI gates.</span>
+      </a>
+      <a class="link-card" href="architecture-overview.html">
+        <strong>Architecture overview</strong>
+        <span>The layered design, the streaming validation pass, rule compilation, and the analytics tier — with diagrams.</span>
+      </a>
+      <a class="link-card" href="developer-guide.html">
+        <strong>Developer guide</strong>
+        <span>For engineers extending Gate: the record model, each reader, the engine's rule plan, extension seams, testing.</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Rowvane Gate · source-available under the Business Source License 1.1 (free for
+    self-hosted production use; converts to Apache 2.0 after four years) ·
+    <a href="https://github.com/KadjiProjects/RowvaneGate">github.com/KadjiProjects/RowvaneGate</a>
+    · pairs naturally with <a href="https://github.com/KadjiProjects/Loadstone">Loadstone</a>,
+    the data-import platform: validate at the gate, import what passes.
+  </div>
+</footer>
+
+</body>
+</html>

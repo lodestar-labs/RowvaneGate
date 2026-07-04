@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rowvane Gate — Developer &amp; Maintainer Guide</title>
+<style>
+  :root {
+    --ink:#1f2933; --muted:#52606d; --line:#dbe2ea; --accent:#0f766e; --accent-soft:#f0fdfa;
+    --panel:#f8fafc; --good:#047857; --good-soft:#ecfdf5; --warn:#b45309; --warn-soft:#fffbeb;
+    --bad:#b91c1c; --bad-soft:#fef2f2; --code-bg:#0f172a; --code-ink:#e2e8f0;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,sans-serif; color:var(--ink); line-height:1.65; background:#fff; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+
+  .layout { display:grid; grid-template-columns:280px 1fr; align-items:start; }
+  @media (max-width:1000px) { .layout { grid-template-columns:1fr; } nav.toc { position:static; height:auto; border-right:none; border-bottom:1px solid var(--line); } }
+
+  nav.toc {
+    position:sticky; top:0; height:100vh; overflow-y:auto; padding:26px 20px 40px;
+    border-right:1px solid var(--line); background:var(--panel); font-size:0.88rem;
+  }
+  nav.toc h2 { font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin:20px 0 8px; }
+  nav.toc h2:first-child { margin-top:0; }
+  nav.toc a { display:block; color:var(--muted); padding:3px 0; }
+  nav.toc a:hover { color:var(--accent); text-decoration:none; }
+  nav.toc .brand { font-weight:700; font-size:1.1rem; color:var(--ink); margin-bottom:2px; }
+  nav.toc .brand-sub { color:var(--muted); font-size:0.8rem; margin-bottom:8px; }
+
+  main { padding:44px 52px 90px; max-width:920px; overflow-x:hidden; }
+  @media (max-width:1000px) { main { padding:32px 24px 60px; } }
+
+  h1 { font-size:2rem; letter-spacing:-0.02em; margin:0 0 4px; }
+  .subtitle { color:var(--muted); font-size:1.05rem; margin:0 0 28px; }
+  h2.section { font-size:1.5rem; letter-spacing:-0.01em; margin:52px 0 12px; padding-bottom:8px; border-bottom:2px solid var(--line); }
+  h3 { font-size:1.15rem; margin:30px 0 8px; }
+  p { margin:10px 0; }
+
+  code { font-family:Consolas,"Cascadia Code",monospace; font-size:0.88em; background:#eef2f7; padding:1px 5px; border-radius:4px; color:#0f2954; }
+  pre { background:var(--code-bg); color:var(--code-ink); padding:16px 18px; border-radius:8px; overflow-x:auto; font-size:0.82rem; line-height:1.5; margin:14px 0; }
+  pre code { background:none; padding:0; color:inherit; font-size:inherit; }
+
+  table { border-collapse:collapse; width:100%; margin:16px 0; font-size:0.9rem; }
+  th,td { border:1px solid var(--line); padding:8px 11px; text-align:left; vertical-align:top; }
+  th { background:var(--panel); font-weight:600; }
+  td code { white-space:nowrap; }
+
+  .note { border-left:4px solid var(--accent); background:var(--accent-soft); padding:11px 16px; border-radius:0 6px 6px 0; margin:16px 0; }
+  .warn { border-left:4px solid var(--warn); background:var(--warn-soft); padding:11px 16px; border-radius:0 6px 6px 0; margin:16px 0; }
+  .gotcha { border-left:4px solid var(--bad); background:var(--bad-soft); padding:11px 16px; border-radius:0 6px 6px 0; margin:16px 0; }
+  .note strong, .warn strong, .gotcha strong { display:block; margin-bottom:2px; }
+
+  .tag-file { font-family:Consolas,monospace; font-size:0.82rem; color:#0f2954; }
+  footer { margin-top:60px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:0.85rem; }
+  ul.tight li, ol.tight li { margin:4px 0; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+  <div class="brand">Rowvane Gate</div>
+  <div class="brand-sub">Developer &amp; Maintainer Guide</div>
+  <h2>Orientation</h2>
+  <a href="#intro">1. What Gate is</a>
+  <a href="#solution">2. Solution structure</a>
+  <a href="#dataflow">3. The end-to-end flow</a>
+  <h2>The domain model</h2>
+  <a href="#ruleset">4. The ruleset model</a>
+  <a href="#record">5. The record model</a>
+  <a href="#findings">6. Findings &amp; the report</a>
+  <h2>Source readers</h2>
+  <a href="#csv">7. The CSV source</a>
+  <a href="#xml">8. The XML source</a>
+  <a href="#json">9. The JSON source</a>
+  <h2>The engine</h2>
+  <a href="#plan">10. The rule plan</a>
+  <a href="#compiled">11. Compiled rules</a>
+  <a href="#scopes">12. Subtree &amp; dataset checks</a>
+  <h2>Schemas &amp; analytics</h2>
+  <a href="#xsd">13. XSD import &amp; validation</a>
+  <a href="#jsonschema">14. JSON Schema import</a>
+  <a href="#analytics">15. DuckDB analytics</a>
+  <h2>Host &amp; operations</h2>
+  <a href="#api">16. The API host</a>
+  <a href="#config">17. Configuration</a>
+  <h2>Working on the code</h2>
+  <a href="#extend">18. Extension points</a>
+  <a href="#testing">19. Testing</a>
+  <a href="#gotchas">20. Maintainer gotchas</a>
+</nav>
+
+<main>
+  <h1>Rowvane Gate Developer Guide</h1>
+  <p class="subtitle">How the validator is built, why it is built that way, and where to change it.</p>
+
+  <p>This guide is for engineers who will maintain and extend Gate. It assumes you can read
+  C# but know nothing about this codebase. Read sections&nbsp;1–3 in order; the rest can be
+  read on demand.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="intro">1. What Gate is</h2>
+
+  <p>Gate validates data files — multi-record CSV, fixed-width, single CSV, XML, JSON —
+  against a single declarative document per data contract called a <strong>ruleset</strong>.
+  The ruleset describes the entity hierarchy, the fields, how each format carries them, and
+  the rules the data must satisfy; the engine derives everything else. There is no
+  per-contract code.</p>
+
+  <div class="note">
+    <strong>The core contract</strong>
+    A file streams in → the source reader yields one root-entity subtree at a time → the
+    compiled rule plan evaluates each subtree as it arrives and accumulates dataset state →
+    a structured report comes out. Rule violations are <em>findings</em> (data problems,
+    HTTP 200 with <code>valid: false</code>); a file whose skeleton cannot be read at all
+    (malformed XML, unknown record type, orphaned child record) is a
+    <code>SourceFormatException</code> (HTTP 400). Keeping those two failure classes apart
+    is a design invariant.
+  </div>
+
+  <p>Two properties are load-bearing throughout:</p>
+  <ul class="tight">
+    <li><strong>Streaming.</strong> Memory is bounded by one root subtree plus the
+    uniqueness-key sets, never the file.</li>
+    <li><strong>Raw strings.</strong> Every value stays exactly what the file said
+    (<code>Dictionary&lt;string, string?&gt;</code>, blank → null). Gate validates what the
+    file actually contains, not a converted interpretation — a <code>dataType</code> check
+    verifies parseability, it never converts.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="solution">2. Solution structure</h2>
+
+  <p>Six projects in a strict layering. The golden rule: <strong>Core has no dependencies
+  and defines the models and contracts; everything else implements them.</strong></p>
+
+  <table>
+    <tr><th>Project</th><th>Responsibility</th><th>Depends on</th></tr>
+    <tr><td class="tag-file">Rowvane.Gate.Core</td><td>Ruleset model (shape, rules, 11 check types), record model, findings/report, <code>IValidationSource</code>, <code>IAnalyticsRunner</code>, the ruleset serializer.</td><td>—</td></tr>
+    <tr><td class="tag-file">Rowvane.Gate.Readers</td><td>Streaming CSV (parser, sniffer, three modes, hierarchy assembler), XML, and JSON sources.</td><td>Core</td></tr>
+    <tr><td class="tag-file">Rowvane.Gate.Engine</td><td><code>ValidationEngine</code>, the compiled rule plan, the ruleset registry and directory store.</td><td>Core</td></tr>
+    <tr><td class="tag-file">Rowvane.Gate.Schemas</td><td>XSD importer, JSON Schema importer, native XSD pass-through validation.</td><td>Core</td></tr>
+    <tr><td class="tag-file">Rowvane.Gate.Analytics</td><td>Embedded DuckDB: <code>sql</code> rules and column profiling.</td><td>Core</td></tr>
+    <tr><td class="tag-file">Rowvane.Gate.Api</td><td>The ASP.NET Core host: minimal-API endpoints, staging, Swagger, Serilog, health.</td><td>everything above</td></tr>
+  </table>
+
+  <p><span class="tag-file">Directory.Build.props</span> pins <code>net10.0</code>,
+  nullable, and implicit usings for all projects. <span class="tag-file">Rowvane.Gate.Tests</span>
+  (NUnit) covers all of it without any external dependency except DuckDB's embedded engine.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="dataflow">3. The end-to-end flow</h2>
+
+  <ol class="tight">
+    <li><code>POST /api/validate/{ruleset}</code> receives the upload and <strong>stages it
+      to disk</strong> — validation streams from the staged file, and <code>sql</code> rules
+      need a real path for DuckDB.</li>
+    <li>The format is taken from <code>?format=</code> or inferred from the file extension
+      via each source's <code>Extensions</code> list.</li>
+    <li><code>ValidationEngine.ValidateAsync</code> builds a <code>RulePlan</code> from the
+      ruleset (once), then iterates <code>source.ReadAsync(stream, ruleset)</code>.</li>
+    <li>For every yielded root subtree: per-record rules and dataset accumulators run over
+      <code>root.SelfAndDescendants()</code>, then subtree-scoped rules (required children
+      are checked per record; parent-scoped uniqueness and aggregates per completed tree).</li>
+    <li>After the stream ends: row-count bounds finalize, then <code>sql</code> rules run
+      against the staged file via <code>IAnalyticsRunner</code>.</li>
+    <li>The report is returned; the staged file is deleted unless
+      <code>Gate:KeepStagedFiles</code> is set.</li>
+  </ol>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="ruleset">4. The ruleset model</h2>
+
+  <p><span class="tag-file">Core/Rulesets</span>. <code>RulesetDocument</code> holds a
+  <code>Shape</code> (a tree of <code>EntityShape</code>, each with
+  <code>FieldShape</code>s and children), <code>SourceOptions</code>, and a list of
+  <code>Rule</code>s. A rule targets an entity (and usually a field), carries a severity,
+  an optional <code>when</code> condition, and a polymorphic <code>RuleCheck</code>:</p>
+
+<pre><code>[JsonPolymorphic(TypeDiscriminatorPropertyName = "type", ...)]
+[JsonDerivedType(typeof(RequiredCheck), "required")]
+[JsonDerivedType(typeof(TypeCheck), "dataType")]
+// ... range, length, regex, inList, compare, unique, aggregate, rowCount, sql
+public abstract class RuleCheck
+{
+    public virtual IEnumerable&lt;string&gt; Validate(RulesetDocument document, EntityShape? entity, Rule rule) { ... }
+
+    [JsonIgnore] public virtual bool RequiresField =&gt; true;
+}</code></pre>
+
+  <p>Three things to know about this model:</p>
+  <ul class="tight">
+    <li><strong>Checks validate themselves.</strong> <code>RulesetDocument.Validate()</code>
+      walks entities, fields, and rules, and delegates check-specific validation to each
+      check's <code>Validate</code> override. It returns <em>every</em> problem, not the
+      first — authors fix a ruleset in one pass. Registration (registry or serializer)
+      refuses invalid documents outright.</li>
+    <li><strong>Field-level checks require an entity.</strong> The engine only wires a
+      record rule when <code>rule.Entity</code> is set; the base
+      <code>RuleCheck.Validate</code> therefore rejects field checks without one — a rule
+      that would compile to nothing must not validate.</li>
+    <li><strong>Ids are stable.</strong> <code>AssignRuleIds()</code> fills gaps with
+      <code>R001…</code> without touching explicit ids, so findings and suppressions keep
+      meaning across edits.</li>
+  </ul>
+
+  <p><code>RulesetSerializer</code> is the single (de)serialization authority: camelCase,
+  case-insensitive, string enums, comments and trailing commas tolerated, and validation +
+  id assignment applied on every deserialize. <code>IRuleset</code> (static abstract
+  <code>Document</code>) lets applications ship compile-time-checked rulesets.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="record">5. The record model</h2>
+
+  <p><span class="tag-file">Core/Records/ValidationRecord.cs</span> — the canonical
+  in-flight record every source produces:</p>
+
+<pre><code>public sealed class ValidationRecord
+{
+    public required EntityShape Entity { get; init; }
+    public SourceLocation Location { get; init; }          // real line and/or logical path
+    public Dictionary&lt;string, string?&gt; Fields { get; }      // raw values, case-insensitive keys
+    public List&lt;ValidationRecord&gt; Children { get; }
+    public ValidationRecord? Parent { get; set; }
+}</code></pre>
+
+  <p>That's the whole contract between readers and the engine. Readers own the mapping
+  from bytes to this shape; the engine never sees a format. <code>SourceLocation</code>
+  carries the parser's real line number when one exists (CSV, XML) and a logical path
+  otherwise (JSONPath for JSON).</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="findings">6. Findings &amp; the report</h2>
+
+  <p><span class="tag-file">Core/Findings/ValidationReport.cs</span>. A
+  <code>Finding</code> is a record: rule id, severity, entity, field, line, path, raw
+  value, message. The report accumulates them with one important wrinkle:</p>
+
+<pre><code>public void Add(Finding finding, int maxPerRule)
+{
+    // severity counters always increment
+    var total = FindingsByRule.TryGetValue(finding.RuleId, out var count) ? count : 0;
+    FindingsByRule[finding.RuleId] = total + 1;
+    if (total &lt; maxPerRule) { Findings.Add(finding); }   // the LIST is capped; counts never are
+}</code></pre>
+
+  <p>So a file with 40&nbsp;000 identical violations reports a readable list and an honest
+  count. <code>Valid</code> is simply "no error-severity findings". Two reserved rule ids:
+  <code>SHAPE</code> (required-child violations) and <code>XSD</code> (native XSD
+  validation findings).</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="csv">7. The CSV source</h2>
+
+  <p><span class="tag-file">Readers/Csv</span> is three cooperating pieces:</p>
+
+  <h3>CsvParser</h3>
+  <p>A dependency-free RFC 4180 state machine: quoted fields, escaped quotes
+  (<code>""</code>), delimiters and line breaks inside quotes, CR/LF/CRLF endings. It
+  streams rows and reports the line each row <em>starts</em> on, so multi-line quoted
+  values don't shift findings.</p>
+
+  <div class="warn">
+    <strong>Invariant: parser state lives outside the read loop.</strong>
+    The parser reads 8&nbsp;KB buffers; <code>inQuotes</code>, <code>justClosedQuote</code>,
+    <code>previousWasCarriageReturn</code>, and the current field builder must survive
+    buffer refills. Any change that moves state into the loop will pass small-file tests
+    and corrupt large files at buffer boundaries.
+  </div>
+
+  <h3>CsvSniffer</h3>
+  <p>When the ruleset doesn't pin options, the source reads up to 20 sample lines, scores
+  candidate delimiters (comma/semicolon/tab/pipe) by count-outside-quotes weighted by
+  consistency, decides header presence (first row matching ≥ half the shape's field names),
+  and then <em>replays</em> the sample ahead of the live stream with line numbers offset.
+  Explicit ruleset settings always win — sniffing only fills gaps, so pinned rulesets are
+  deterministic.</p>
+
+  <div class="gotcha">
+    <strong>Known limitation, documented on purpose:</strong> a quoted field spanning the
+    20-line sample boundary would mis-split during replay. Files that open with multi-line
+    quoted values must pin <code>delimiter</code> in the ruleset. This is a deliberate
+    trade against buffering unbounded input to sniff safely.
+  </div>
+
+  <h3>CsvValidationSource</h3>
+  <p>Dispatches on <code>source.csv.mode</code>. <code>single</code> maps columns by header
+  or positionally. <code>multiRecord</code> and <code>fixedWidth</code> share the
+  <code>HierarchyAssembler</code>: each record attaches to the most recent record of its
+  parent entity, and the previous root subtree is yielded the moment a new root begins.</p>
+
+  <div class="gotcha">
+    <strong>Invariant: clear <code>_latest</code> when a new root starts.</strong>
+    The assembler tracks the most recent record per entity. When a new root begins, that
+    map <em>must</em> be cleared — otherwise a child record whose parent only exists in the
+    <em>previous</em> tree silently attaches to an already-yielded, already-validated
+    subtree and vanishes from the report (no count, no finding). With the clear, it is what
+    it should be: a structural error naming the line. There is a regression test for this.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="xml">8. The XML source</h2>
+
+  <p><span class="tag-file">Readers/Xml/XmlValidationSource.cs</span> walks the document
+  with a forward-only async <code>XmlReader</code> and materializes one root-entity subtree
+  at a time. Element names matching child entities recurse; elements <em>or attributes</em>
+  matching shape fields become values; anything else is <code>Skip</code>ped — documents
+  may carry extra content without breaking. Real line numbers come from
+  <code>IXmlLineInfo</code>; no custom attributes are needed in source files. DTD
+  processing is prohibited (XXE). An optional <code>source.xml.rootElement</code> wrapper
+  confines matching. <code>XmlException</code>s are wrapped into
+  <code>SourceFormatException</code> with the parser's line number.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="json">9. The JSON source</h2>
+
+  <p><span class="tag-file">Readers/Json/JsonValidationSource.cs</span> peeks the first
+  significant byte. A top-level <strong>array</strong> streams element by element via
+  <code>DeserializeAsyncEnumerable</code> — bounded memory for arbitrarily large exports.
+  A top-level <strong>object</strong> (record array under <code>source.json.rootProperty</code>
+  or a property named like the root entity) is accepted but parses the whole document;
+  the class doc says so and steers users to arrays. Numbers and booleans keep their literal
+  text (<code>GetRawText()</code>), JSON <code>null</code> is a missing value, and
+  locations are JSONPath-style (<code>$[12].hauls[0]</code>).</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="plan">10. The rule plan</h2>
+
+  <p><span class="tag-file">Engine/ValidationEngine.cs</span>, private class
+  <code>RulePlan</code> — the compiled execution plan for one run, resolved before the
+  first record flows. Its constructor sorts every rule into one of five buckets:</p>
+
+  <table>
+    <tr><th>Bucket</th><th>Members</th><th>Evaluated</th></tr>
+    <tr><td>Record rules</td><td>required, dataType, range, length, regex, inList, compare — compiled per entity</td><td>per record, as it streams</td></tr>
+    <tr><td>Dataset uniqueness</td><td><code>unique</code> with dataset scope — one <code>HashSet</code> per rule</td><td>per record (key added as seen)</td></tr>
+    <tr><td>Subtree rules</td><td><code>unique</code> with parent scope, <code>aggregate</code></td><td>per completed root subtree</td></tr>
+    <tr><td>Row counts</td><td><code>rowCount</code> — counters per entity</td><td>at finalize</td></tr>
+    <tr><td>SQL rules</td><td><code>sql</code></td><td>after streaming, via <code>IAnalyticsRunner</code></td></tr>
+  </table>
+
+  <p>Required-children checks come from the shape, not from rules: the plan precomputes
+  each entity's required children and verifies them per record (rule id
+  <code>SHAPE</code>). Composite uniqueness keys are built by joining raw field values with
+  an ASCII unit separator (<code>0x1F</code>); records whose key fields are all missing are not
+  checked — presence is <code>required</code>'s job.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="compiled">11. Compiled rules</h2>
+
+  <p><span class="tag-file">Engine/CompiledRule.cs</span>. Each per-record rule is
+  prepared once for the hot path: regexes compiled (with a 2-second match timeout), value
+  lists frozen into hash sets with the right comparer, numeric bounds pre-parsed —
+  evaluation is a single delegate call per record:</p>
+
+<pre><code>public Finding? Evaluate(ValidationRecord record)
+{
+    if (_when is not null &amp;&amp; !_when(record)) return null;   // applicability condition
+    var message = _evaluate(record);                          // null = pass
+    return message is null ? null : new Finding(_rule.Id!, _rule.Severity, ...);
+}</code></pre>
+
+  <p>Design rules encoded here, worth preserving:</p>
+  <ul class="tight">
+    <li><strong>Every field check passes on missing values.</strong> Only
+      <code>required</code> asserts presence. This keeps all checks composable with
+      optional fields.</li>
+    <li><strong>Invariant culture everywhere.</strong> Numbers via
+      <code>decimal.TryParse(NumberStyles.Float, InvariantCulture)</code>; dates via
+      <code>DateOnly/DateTime/TimeOnly</code> with optional exact formats.</li>
+    <li><strong><code>compare</code> resolves field paths.</strong>
+      <code>"parent.Field"</code> climbs the record tree (prefix repeatable). Numeric
+      comparison applies only when <em>both</em> sides parse as numbers; otherwise ordinal
+      string comparison.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="scopes">12. Subtree &amp; dataset checks</h2>
+
+  <p><code>EvaluateSubtree</code> runs when a root is complete: parent-scoped uniqueness
+  inspects each sibling group once (triggered by the group's first member), and aggregates
+  compare <code>sum/count/avg/min/max</code> of a child field per parent against the
+  parent's own field — exactly (<code>op</code>) or within
+  <code>deviationPercent</code>. A parent whose own value doesn't parse is skipped (that's
+  a <code>dataType</code> finding's job), and non-count aggregates with zero parseable
+  child values are skipped rather than compared as zero.</p>
+
+  <p><code>Finalize</code> closes the dataset scope: row-count bounds check the per-entity
+  counters (entities that never appeared count as zero, so <code>min</code> works). Then
+  the engine runs <code>sql</code> rules; if no analytics runner is registered or no
+  staged file path was provided, each sql rule degrades to a <em>warning</em> finding
+  instead of failing the run — rulesets stay portable across deployments.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="xsd">13. XSD import &amp; validation</h2>
+
+  <p><span class="tag-file">Schemas/Xsd/XsdImporter.cs</span> compiles the schema set,
+  picks the root global element (explicitly, or the only one), and walks
+  <code>ElementSchemaType</code>s: complex types <em>with child elements</em> become
+  entities; everything else becomes fields. Constraints map to native rules —
+  minOccurs/use ⇒ <code>required</code>, base type ⇒ <code>dataType</code>, enumeration ⇒
+  <code>inList</code> (case-sensitive), pattern ⇒ <code>regex</code> (anchored
+  <code>^(?:…)$</code>, since XSD patterns match whole values), value facets ⇒
+  <code>range</code>, length facets ⇒ <code>length</code>. Recursive type definitions are
+  cut off via a visiting set. The result is validated like any hand-written ruleset before
+  it leaves the importer.</p>
+
+  <p><span class="tag-file">Schemas/Xsd/XsdValidator.cs</span> is the separate pass-through
+  path: it streams the document through .NET's validating reader and converts every
+  <code>ValidationEventHandler</code> callback into a structured <code>Finding</code> (rule
+  id <code>XSD</code>) with the exception's real line number. Malformed XML becomes one
+  error finding rather than an exception — this endpoint's job is reporting, not refusing.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="jsonschema">14. JSON Schema import</h2>
+
+  <p><span class="tag-file">Schemas/Json/JsonSchemaImporter.cs</span> handles the widely
+  used subset: <code>type</code> / <code>properties</code> / <code>required</code> /
+  <code>items</code> / <code>enum</code> / <code>pattern</code> / numeric bounds /
+  length bounds / <code>format</code>. Object and array-of-object properties become child
+  entities; the rest become fields. Type unions (<code>["string","null"]</code>) use the
+  first non-null entry. Exclusive bounds accept <em>both</em> spellings: draft 6+ numeric
+  <code>exclusiveMinimum: 5</code> and draft-4 boolean
+  <code>minimum: 5, exclusiveMinimum: true</code>. Because JSON Schemas rarely name their
+  root, the caller supplies <code>rootEntity</code> (default <code>Record</code>).</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="analytics">15. DuckDB analytics</h2>
+
+  <p><span class="tag-file">Analytics/DuckDbAnalytics.cs</span> implements
+  <code>IAnalyticsRunner</code> with an in-memory DuckDB connection per call. For a
+  <code>sql</code> rule it creates <code>CREATE VIEW data AS SELECT * FROM
+  read_csv_auto('…')</code> (or <code>read_json_auto</code> / <code>read_parquet</code> by
+  format), substitutes <code>{file}</code> in the query, and formats each returned row as
+  <code>name=value; name=value</code> — capped at 10&nbsp;000 rows per rule. Profiling is
+  DuckDB's <code>SUMMARIZE</code> re-shaped into dictionaries. XML staged files are
+  rejected with a clear <code>NotSupportedException</code>; the API surfaces it as 400.</p>
+
+  <div class="note">
+    <strong>SQL rules are trusted input.</strong> Queries come from ruleset authors — the
+    same people who could already declare any rule. The file <em>path</em> is quoted
+    defensively, but the query itself is executed as written, against an in-memory database
+    whose only content is the staged file's view. Do not expose ruleset registration to
+    untrusted callers.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="api">16. The API host</h2>
+
+  <table>
+    <tr><th>Endpoint</th><th>What it does</th></tr>
+    <tr><td><code>GET /api/rulesets</code></td><td>List: name, version, entities, rule count.</td></tr>
+    <tr><td><code>GET /api/rulesets/{name}</code></td><td>The full ruleset JSON (canonical serialization).</td></tr>
+    <tr><td><code>PUT /api/rulesets/{name}</code></td><td>Validate → persist to the ruleset directory → register in the live registry. Invalid ⇒ 400 with every problem.</td></tr>
+    <tr><td><code>DELETE /api/rulesets/{name}</code></td><td>Unregister and delete the file.</td></tr>
+    <tr><td><code>POST /api/rulesets/import/xsd</code></td><td>XSD upload → generated ruleset (query: <code>name</code>, <code>root</code>, <code>register</code>).</td></tr>
+    <tr><td><code>POST /api/rulesets/import/jsonschema</code></td><td>JSON Schema upload → generated ruleset (query: <code>name</code>, <code>rootEntity</code>, <code>register</code>).</td></tr>
+    <tr><td><code>POST /api/validate/{ruleset}</code></td><td>Multipart <code>file</code> (+ optional <code>?format=</code>) → the validation report.</td></tr>
+    <tr><td><code>POST /api/validate/xsd</code></td><td>Multipart <code>xml</code> + <code>xsd</code> → native schema-validation findings.</td></tr>
+    <tr><td><code>POST /api/profile</code></td><td>Multipart <code>file</code> → DuckDB column statistics.</td></tr>
+    <tr><td><code>GET /health</code>, <code>/</code></td><td>Probe; root redirects to Swagger.</td></tr>
+  </table>
+
+  <p><span class="tag-file">GateInitializer</span> (a hosted service) loads every
+  <code>*.json</code> in the ruleset directory into the registry at startup, skipping —
+  and logging — invalid files rather than refusing to boot. The registry itself is a
+  <code>ConcurrentDictionary</code> keyed case-insensitively; the directory store
+  sanitizes names before using them as file names.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="config">17. Configuration</h2>
+
+  <p>One options class, section <code>Gate</code>:</p>
+  <table>
+    <tr><th>Key</th><th>Default</th><th>Meaning</th></tr>
+    <tr><td><code>Gate:RulesetDirectory</code></td><td><code>data/rulesets</code></td><td>Where registered rulesets persist as JSON (git-friendly, deployable).</td></tr>
+    <tr><td><code>Gate:StagingPath</code></td><td><code>data/staging</code></td><td>Where uploads are staged during validation.</td></tr>
+    <tr><td><code>Gate:MaxUploadBytes</code></td><td>2&nbsp;GiB</td><td>Kestrel and multipart limits — the endpoint is unauthenticated in v1, so the ceiling is finite on purpose.</td></tr>
+    <tr><td><code>Gate:KeepStagedFiles</code></td><td><code>false</code></td><td>Keep staged files after validation (debugging sql rules).</td></tr>
+  </table>
+  <p>Logging is Serilog, configured from <code>appsettings.json</code>
+  (<code>ReadFrom.Configuration</code>), with a console bootstrap logger for startup
+  failures.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="extend">18. Extension points</h2>
+
+  <ul class="tight">
+    <li><strong>A new source format</strong> (Excel, Parquet) is one
+      <code>IValidationSource</code>: a format key, an extensions list for inference, and
+      a <code>ReadAsync</code> that yields root subtrees. Register it as a singleton;
+      the engine and the API pick it up through DI. It must stream.</li>
+    <li><strong>A new check type</strong> is a <code>RuleCheck</code> subclass + a
+      <code>[JsonDerivedType]</code> line + either a case in
+      <code>CompiledRule.TryCompile</code> (per-record) or a bucket in
+      <code>RulePlan</code> (stateful). Add its self-validation in <code>Validate</code>.</li>
+    <li><strong>A different analytics engine</strong> is one
+      <code>IAnalyticsRunner</code>. The engine takes the first registered runner; absence
+      degrades sql rules to warnings.</li>
+    <li><strong>Compile-time rulesets</strong>: implement <code>IRuleset</code>'s static
+      abstract <code>Document</code> and register the document at startup — no files, no
+      runtime discovery.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="testing">19. Testing</h2>
+
+  <p><span class="tag-file">tests/Rowvane.Gate.Tests</span> — NUnit, no mocks, no
+  database. <code>TestData.Trips()</code> builds a compact 3-level hierarchy
+  (Trip → Haul → Sample) shared across the suite. Coverage is organized by seam:
+  ruleset model and serialization round-trips; each CSV mode plus the XML/JSON sources
+  (including line numbers and parent links); engine behavior per check type; schema
+  importers asserting generated rules; DuckDB exercised for real (temp CSV file);
+  regression tests pinning the assembler-reset, entity-requirement, and draft-4 bounds
+  fixes. Run with <code>dotnet test</code>.</p>
+
+  <p>For end-to-end verification, drive the API itself — see
+  <span class="tag-file">.claude/skills/verify/SKILL.md</span> in the repo for the exact
+  launch-and-curl recipe.</p>
+
+  <!-- ============================================================ -->
+  <h2 class="section" id="gotchas">20. Maintainer gotchas</h2>
+
+  <ul class="tight">
+    <li><strong>Findings vs exceptions.</strong> Data problems are findings; unreadable
+      skeletons are <code>SourceFormatException</code>. Don't blur it — the API's 200/400
+      split and every consumer's retry logic depend on it.</li>
+    <li><strong>Missing values pass field checks.</strong> If a new check fails on null,
+      optional fields break everywhere. Presence is <code>required</code>'s job, only.</li>
+    <li><strong>The CSV parser's state lives outside its read loop</strong> — see §7. Test
+      any parser change with fields spanning the 8&nbsp;KB buffer boundary.</li>
+    <li><strong><code>HierarchyAssembler._latest</code> must be cleared per root</strong> —
+      see §7. The failure mode is silent record loss, which no ordinary test notices.</li>
+    <li><strong>Findings caps are list-only.</strong> <code>ValidationReport.Add</code>
+      must keep counting past the cap; dashboards rely on exact
+      <code>findingsByRule</code>.</li>
+    <li><strong>Everything matches case-insensitively</strong> — entity names, field
+      names, record types, JSON properties, format keys. A new lookup that defaults to
+      ordinal comparison will work in tests and fail on the first real file.</li>
+    <li><strong><code>dotnet test</code> only rebuilds the test bin.</strong> When manually
+      driving the API after library changes, rebuild <code>Rowvane.Gate.Api</code> first or
+      <code>dotnet run --no-build</code> serves stale DLLs.</li>
+  </ul>
+
+  <footer>
+    Rowvane Gate developer guide · repository: <code>KadjiProjects/RowvaneGate</code> ·
+    companion documents: <code>ruleset-reference.md</code> (the full document spec),
+    <code>architecture-overview.html</code> (the picture), <code>recipes.md</code> (usage
+    patterns).
+  </footer>
+
+</main>
+</div>
+</body>
+</html>

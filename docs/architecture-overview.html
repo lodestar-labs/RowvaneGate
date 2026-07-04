@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rowvane Gate — Architecture &amp; Capabilities</title>
+<style>
+  :root {
+    --ink: #1f2933;
+    --muted: #52606d;
+    --line: #d9e2ec;
+    --accent: #0f766e;
+    --accent-soft: #f0fdfa;
+    --good: #047857;
+    --warn: #b45309;
+    --bg: #ffffff;
+    --panel: #f8fafc;
+    --code: #f1f5f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 28px 80px; }
+  header {
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #f8fafc, #ffffff);
+    padding: 48px 0 36px;
+    margin-bottom: 40px;
+  }
+  header .wrap { padding-bottom: 0; }
+  h1 { font-size: 2.1rem; margin: 0 0 8px; letter-spacing: -0.02em; }
+  .tagline { font-size: 1.15rem; color: var(--muted); margin: 0 0 18px; }
+  .meta { font-size: 0.85rem; color: var(--muted); }
+  .meta code { background: var(--code); padding: 2px 6px; border-radius: 4px; }
+  h2 { font-size: 1.45rem; margin: 48px 0 12px; letter-spacing: -0.01em; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+  p { margin: 10px 0; }
+  code { font-family: Consolas, "Cascadia Code", monospace; font-size: 0.92em; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 16px 18px; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.93rem; }
+  th, td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; }
+  .figure { margin: 24px 0; padding: 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+  .figure figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 10px; text-align: center; }
+  .figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  .pill { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-right: 6px; }
+  footer { margin-top: 60px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
+  /* SVG shared classes */
+  .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; rx: 8; }
+  .box-accent { fill: #f0fdfa; stroke: #0f766e; stroke-width: 1.4; }
+  .box-good { fill: #ecfdf5; stroke: #047857; stroke-width: 1.4; }
+  .box-warn { fill: #fffbeb; stroke: #b45309; stroke-width: 1.4; }
+  .box-dark { fill: #0f172a; stroke: #0f172a; }
+  .lbl { font: 600 13px "Segoe UI", system-ui, sans-serif; fill: #1f2933; }
+  .lbl-sub { font: 400 11px "Segoe UI", system-ui, sans-serif; fill: #52606d; }
+  .lbl-white { font: 600 13px "Segoe UI", system-ui, sans-serif; fill: #f8fafc; }
+  .arrow { stroke: #64748b; stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+  .lane { font: 700 11px "Segoe UI", system-ui, sans-serif; fill: #94a3b8; letter-spacing: 0.08em; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>Rowvane Gate</h1>
+    <p class="tagline">Validate any data file — multi-record CSV, fixed-width, XML, JSON — against one declarative ruleset.</p>
+    <p class="meta">
+      Architecture &amp; capabilities overview ·
+      <code>github.com/KadjiProjects/RowvaneGate</code> · .NET 10 · BSL 1.1
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<h2>1. The core idea</h2>
+<p>
+Every organization that receives files eventually hand-writes the same program: parse the
+file, walk its structure, check the fields, check the totals, and produce some report of
+what was wrong — then writes it again, slightly differently, for the next feed and the
+next format. Gate replaces that entire class of one-off checkers with <strong>a single
+declarative ruleset per data contract</strong>. The ruleset is the only thing you author
+(or generate from an XSD / JSON Schema). Everything else is derived from it:
+</p>
+<table>
+  <tr><th>You declare (once)</th><th>Gate derives</th></tr>
+  <tr>
+    <td>Entity hierarchy, fields, per-format carriage (record types, positions, wrappers),
+        and the rules the data must satisfy</td>
+    <td>Format parsing expectations for CSV / fixed-width / XML / JSON · compiled rule
+        evaluation · hierarchy reconstruction and shape checks · uniqueness and row-count
+        accumulators · aggregate reconciliation · the structured validation report</td>
+  </tr>
+</table>
+
+<div class="callout">
+<strong>The core contract:</strong> a file streams in → records flow through the compiled
+rule plan one root subtree at a time → a structured report streams out: every violation
+with rule id, severity, entity, field, real source line, and the raw value. A file whose
+<em>skeleton</em> is broken (malformed XML, unknown record type, orphaned child record)
+fails fast with the offending line; everything else is findings, never exceptions.
+</div>
+
+<h2>2. System architecture</h2>
+<p>
+Six projects in a strict layering. The golden rule: <strong>Core has no dependencies and
+defines the models and contracts; everything else implements them.</strong> New formats
+are new <code>IValidationSource</code> implementations; the analytics tier is optional and
+plugs in behind <code>IAnalyticsRunner</code>.
+</p>
+
+<figure class="figure">
+<svg viewBox="0 0 900 540" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- Clients -->
+  <rect x="330" y="14" width="240" height="46" class="box"/>
+  <text x="450" y="33" text-anchor="middle" class="lbl">Clients / pipelines / CI</text>
+  <text x="450" y="49" text-anchor="middle" class="lbl-sub">upload files, manage rulesets, read reports</text>
+
+  <path class="arrow" d="M450 60 L450 92"/>
+
+  <!-- API layer -->
+  <text x="24" y="120" class="lane">HTTP</text>
+  <rect x="90" y="96" width="720" height="62" class="box box-accent"/>
+  <text x="450" y="118" text-anchor="middle" class="lbl">Rowvane.Gate.Api — REST + Swagger</text>
+  <text x="450" y="136" text-anchor="middle" class="lbl-sub">rulesets · validate · schema import · profiling · health — Serilog wired in, uploads staged to disk</text>
+
+  <path class="arrow" d="M450 158 L450 190"/>
+
+  <!-- Engine layer -->
+  <text x="24" y="222" class="lane">ENGINE</text>
+  <rect x="90" y="198" width="720" height="96" class="box"/>
+  <text x="450" y="220" text-anchor="middle" class="lbl">Rowvane.Gate.Engine — one streaming pass per file</text>
+  <rect x="112" y="234" width="200" height="44" class="box"/>
+  <text x="212" y="252" text-anchor="middle" class="lbl-sub">Compiled rule plan</text>
+  <text x="212" y="267" text-anchor="middle" class="lbl-sub">regexes, sets, delegates — no reflection</text>
+  <rect x="336" y="234" width="228" height="44" class="box"/>
+  <text x="450" y="252" text-anchor="middle" class="lbl-sub">Per-record · per-subtree · dataset</text>
+  <text x="450" y="267" text-anchor="middle" class="lbl-sub">three evaluation scopes, one pass</text>
+  <rect x="588" y="234" width="200" height="44" class="box"/>
+  <text x="688" y="252" text-anchor="middle" class="lbl-sub">Ruleset registry + store</text>
+  <text x="688" y="267" text-anchor="middle" class="lbl-sub">live catalog · JSON files on disk</text>
+
+  <!-- Readers -->
+  <text x="24" y="352" class="lane">INPUT</text>
+  <rect x="90" y="330" width="330" height="88" class="box"/>
+  <text x="255" y="352" text-anchor="middle" class="lbl">Rowvane.Gate.Readers (streaming)</text>
+  <rect x="106" y="364" width="90" height="38" class="box"/>
+  <text x="151" y="382" text-anchor="middle" class="lbl-sub">CSV / fixed-</text>
+  <text x="151" y="395" text-anchor="middle" class="lbl-sub">width / multi</text>
+  <rect x="210" y="364" width="90" height="38" class="box"/>
+  <text x="255" y="387" text-anchor="middle" class="lbl-sub">XML</text>
+  <rect x="314" y="364" width="90" height="38" class="box"/>
+  <text x="359" y="387" text-anchor="middle" class="lbl-sub">JSON</text>
+
+  <path class="arrow" d="M255 330 L255 294"/>
+  <text x="112" y="316" class="lbl-sub">one canonical record tree at a time</text>
+
+  <!-- Schemas + Analytics -->
+  <rect x="460" y="330" width="160" height="88" class="box"/>
+  <text x="540" y="352" text-anchor="middle" class="lbl">Gate.Schemas</text>
+  <text x="540" y="372" text-anchor="middle" class="lbl-sub">XSD importer</text>
+  <text x="540" y="388" text-anchor="middle" class="lbl-sub">JSON Schema importer</text>
+  <text x="540" y="404" text-anchor="middle" class="lbl-sub">native XSD validation</text>
+
+  <text x="24" y="352" class="lane"></text>
+  <rect x="650" y="330" width="160" height="88" class="box"/>
+  <text x="730" y="352" text-anchor="middle" class="lbl">Gate.Analytics</text>
+  <text x="730" y="372" text-anchor="middle" class="lbl-sub">embedded DuckDB</text>
+  <text x="730" y="388" text-anchor="middle" class="lbl-sub">sql rules over staged file</text>
+  <text x="730" y="404" text-anchor="middle" class="lbl-sub">column profiling</text>
+
+  <path class="arrow" d="M540 330 L540 294"/>
+  <path class="arrow" d="M730 330 L730 294"/>
+
+  <!-- Core -->
+  <rect x="90" y="450" width="720" height="52" class="box box-dark"/>
+  <text x="450" y="472" text-anchor="middle" class="lbl-white">Rowvane.Gate.Core — dependency-free models and contracts</text>
+  <text x="450" y="490" text-anchor="middle" class="lbl-sub" fill="#94a3b8">RulesetDocument · EntityShape · Rule + 11 check types · ValidationRecord · Finding / ValidationReport · IValidationSource · IAnalyticsRunner</text>
+
+  <path class="arrow" d="M255 418 L255 450"/>
+  <path class="arrow" d="M540 418 L540 450"/>
+  <path class="arrow" d="M730 418 L730 450"/>
+
+  <text x="450" y="528" text-anchor="middle" class="lbl-sub">A new format (Excel, Parquet) is one IValidationSource implementation. The analytics tier is optional — without it, sql rules degrade to warnings.</text>
+</svg>
+<figcaption>Figure 1 — Layered architecture. The API host is one ASP.NET Core process; the engine, readers, and analytics are plain libraries usable without the host.</figcaption>
+</figure>
+
+<h2>3. The validation pass</h2>
+<p>
+Each validation is one streaming pass. The source reader yields completed root subtrees;
+the engine evaluates three scopes of rules against them without ever holding the file:
+</p>
+
+<figure class="figure">
+<svg viewBox="0 0 900 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#047857"/>
+    </marker>
+  </defs>
+
+  <rect x="16" y="90" width="120" height="60" class="box"/>
+  <text x="76" y="115" text-anchor="middle" class="lbl">File</text>
+  <text x="76" y="133" text-anchor="middle" class="lbl-sub">csv · fw · xml · json</text>
+
+  <path d="M136 120 L176 120" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="176" y="90" width="140" height="60" class="box box-accent"/>
+  <text x="246" y="115" text-anchor="middle" class="lbl">Source reader</text>
+  <text x="246" y="133" text-anchor="middle" class="lbl-sub">streams root subtrees</text>
+
+  <path d="M316 120 L356 120" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="356" y="28" width="150" height="70" class="box"/>
+  <text x="431" y="50" text-anchor="middle" class="lbl">Per record</text>
+  <text x="431" y="68" text-anchor="middle" class="lbl-sub">required · type · range · length</text>
+  <text x="431" y="83" text-anchor="middle" class="lbl-sub">regex · list · compare · when</text>
+
+  <rect x="356" y="112" width="150" height="62" class="box"/>
+  <text x="431" y="134" text-anchor="middle" class="lbl">Per subtree</text>
+  <text x="431" y="151" text-anchor="middle" class="lbl-sub">required children · aggregates</text>
+  <text x="431" y="166" text-anchor="middle" class="lbl-sub">parent-scoped uniqueness</text>
+
+  <rect x="356" y="188" width="150" height="62" class="box"/>
+  <text x="431" y="210" text-anchor="middle" class="lbl">Accumulate</text>
+  <text x="431" y="227" text-anchor="middle" class="lbl-sub">dataset uniqueness keys</text>
+  <text x="431" y="242" text-anchor="middle" class="lbl-sub">entity row counts</text>
+
+  <path d="M506 63 L560 108" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+  <path d="M506 140 L560 140" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+  <path d="M506 219 L560 172" stroke="#64748b" stroke-width="1.6" fill="none" marker-end="url(#arr2)"/>
+
+  <rect x="560" y="104" width="140" height="72" class="box"/>
+  <text x="630" y="128" text-anchor="middle" class="lbl">Finalize</text>
+  <text x="630" y="146" text-anchor="middle" class="lbl-sub">row-count bounds</text>
+  <text x="630" y="161" text-anchor="middle" class="lbl-sub">sql rules (DuckDB)</text>
+
+  <path d="M700 140 L744 140" stroke="#047857" stroke-width="1.8" fill="none" marker-end="url(#arrG)"/>
+
+  <rect x="744" y="104" width="140" height="72" class="box box-good"/>
+  <text x="814" y="128" text-anchor="middle" class="lbl">Report</text>
+  <text x="814" y="146" text-anchor="middle" class="lbl-sub">findings · counts by rule</text>
+  <text x="814" y="161" text-anchor="middle" class="lbl-sub">record counts · valid?</text>
+
+  <text x="450" y="290" text-anchor="middle" class="lbl-sub">Memory is bounded by one root subtree plus the uniqueness keys — never the file.</text>
+  <text x="450" y="308" text-anchor="middle" class="lbl-sub">Findings are capped per rule for the list, but per-rule totals and severity counts are always exact.</text>
+</svg>
+<figcaption>Figure 2 — One pass, three evaluation scopes. Per-record rules fire as records arrive; subtree rules fire per completed root; dataset rules finalize at the end.</figcaption>
+</figure>
+
+<h3>Rule compilation</h3>
+<p>
+Rulesets are interpreted <em>once</em>, before the first record flows. Each rule's
+configuration is parsed into a compiled form — regexes compiled with a timeout, value
+lists frozen into hash sets, numeric bounds pre-parsed — and evaluation reduces to one
+delegate call per record. No reflection and no re-interpretation of JSON in the hot path.
+The compiled plan also resolves the shape's required-child structure and sets up the
+uniqueness and row-count accumulators up front.
+</p>
+
+<h2>4. Flat files are the hard part — and the point</h2>
+<p>
+XML and JSON carry their own structure; flat files don't, and they are what suppliers
+actually send. Gate's CSV source covers the three shapes that occur commercially:
+</p>
+<table>
+  <tr><th style="width:150px">Mode</th><th>What it handles</th></tr>
+  <tr>
+    <td><code>single</code></td>
+    <td>One record type per file. Columns map by header row — detected automatically when
+        the first row matches the shape's field names — or positionally by field order.</td>
+  </tr>
+  <tr>
+    <td><code>multiRecord</code></td>
+    <td>Every line announces its record type in a discriminator column (bank files,
+        mainframe extracts, scientific exchange formats). The hierarchy is reconstructed
+        from record order: each record attaches to the most recent record of its parent
+        entity; a completed root subtree is yielded as soon as the next root begins. A
+        child record with no parent in the <em>current</em> tree is a structural error —
+        records are never silently attached to an already-validated tree.</td>
+  </tr>
+  <tr>
+    <td><code>fixedWidth</code></td>
+    <td>Like multiRecord, but fields are sliced by each field's declared start/length.
+        The layout document is transcribed into the shape once, instead of living in
+        every consumer's substring arithmetic.</td>
+  </tr>
+</table>
+<p>
+Underneath sits a dependency-free RFC 4180 parser — quoted fields, escaped quotes,
+delimiters and line breaks inside quotes, CR/LF/CRLF endings — that reports the physical
+line each row <em>starts</em> on, so findings point at the right place even for multi-line
+values. Delimiters are sniffed across comma/semicolon/tab/pipe when the ruleset doesn't
+pin one; explicit settings always win, so behavior is deterministic once an author pins
+the options.
+</p>
+
+<h2>5. Schema import: meet contracts where they are</h2>
+<p>
+Many data contracts already exist as an XSD or a JSON Schema. Gate imports either into a
+<em>native, editable</em> ruleset: the element hierarchy becomes the shape; minOccurs and
+required become <code>required</code> rules; enumerations become <code>inList</code>;
+patterns become <code>regex</code>; value and length facets become <code>range</code> and
+<code>length</code>; base types become <code>dataType</code>. The payoff is the part XSD
+alone can never do: <strong>import the schema once, then validate CSV or JSON
+representations of the same data against the identical rules.</strong> For consumers whose
+contract is strictly the XSD, native pass-through validation (with the parser's real line
+numbers as structured findings) is also built in.
+</p>
+
+<h2>6. The analytical tier</h2>
+<p>
+Some checks span the whole dataset in ways per-record rules can't express. Gate embeds
+DuckDB for two capabilities, both optional:
+</p>
+<ul>
+  <li><strong>SQL rules</strong> — the ruleset's <code>sql</code> check runs a query
+      against the staged file (exposed as the view <code>data</code>); every returned row
+      becomes a finding with the row's columns formatted into the message. Deduplication
+      windows, ratio checks, statistical outliers — if you can query it, you can gate on it.</li>
+  <li><strong>Profiling</strong> — <code>POST /api/profile</code> returns per-column
+      statistics (types, ranges, null percentages) for a quick picture of an unfamiliar
+      file <em>before</em> writing rules for it.</li>
+</ul>
+<p>
+Deployments without the analytics package still run every declarative rule; sql rules
+degrade to warning findings, so rulesets stay portable.
+</p>
+
+<h2>7. Capabilities</h2>
+<table>
+  <tr><th style="width:220px">Capability</th><th>How Gate delivers it</th></tr>
+  <tr>
+    <td><span class="pill">Input</span>Any format</td>
+    <td>Multi-record CSV, fixed-width, single CSV, XML, JSON — all streaming into one
+        canonical record tree. Same ruleset, same rules, every format. Extra XML elements
+        and JSON properties are ignored, so noisy real-world files still validate.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Rules</span>A complete vocabulary</td>
+    <td>required · dataType (8 kinds + exact formats) · range · length · regex · inList ·
+        compare (literals, sibling fields, <code>parent.</code> paths) · unique
+        (dataset- or parent-scoped composite keys) · aggregate (sum/count/avg/min/max vs
+        a parent field, exact or tolerance) · rowCount · sql. All conditionable with
+        <code>when</code>, all with three severities.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Shape</span>Hierarchy checks</td>
+    <td>Required children enforced per parent record; hierarchy reconstructed from record
+        order for flat files; cross-level comparisons climb the tree with repeatable
+        <code>parent.</code> prefixes.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Findings</span>Forensics, not booleans</td>
+    <td>Rule id, severity, entity, field, physical line, logical path, raw value, and
+        message on every finding. Per-entity record counts and per-rule totals that are
+        never truncated, even when the finding list is capped.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Schemas</span>Import, don't transcribe</td>
+    <td>XSD and JSON Schema (draft 4 through 2020-12 subset) become editable native
+        rulesets; native XSD pass-through validation for strict XML contracts.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Scale</span>Streaming</td>
+    <td>One pass; memory bounded by one root subtree plus uniqueness keys. Compiled rule
+        plan — no reflection, no JSON re-interpretation per record.</td>
+  </tr>
+  <tr>
+    <td><span class="pill">Ops</span>Simple to run</td>
+    <td>One ASP.NET Core process; rulesets are JSON files on disk (git-friendly) mirrored
+        in a live registry; structured Serilog logs; Swagger; health checks; a 2&nbsp;GB
+        default upload ceiling. Works as a library too — the engine and readers are plain
+        packages without the host.</td>
+  </tr>
+</table>
+
+<footer>
+  Rowvane Gate architecture overview · repository: <code>KadjiProjects/RowvaneGate</code> ·
+  see also <code>docs/ruleset-reference.md</code> for the full ruleset specification and
+  <code>docs/developer-guide.html</code> for the maintainer's tour of the code.
+</footer>
+
+</div>
+</body>
+</html>
