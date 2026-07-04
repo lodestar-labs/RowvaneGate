@@ -95,6 +95,17 @@ curl -X POST http://localhost:5000/api/profile -F "file=@mystery.csv"
 That single document validates the same trips whether they arrive as multi-record CSV,
 nested XML, or a JSON array.
 
+## Documentation
+
+- [Ruleset reference](docs/ruleset-reference.md) — every property of the ruleset
+  document: shape, source options, all eleven check types, the report format, schema import.
+- [Recipes](docs/recipes.md) — multi-record exchange files, XSD contracts over non-XML
+  data, JSON exports, fixed-width layouts, SQL rules, CI gates.
+- [Architecture overview](docs/architecture-overview.html) — the layered design, the
+  streaming validation pass, rule compilation, and the analytics tier.
+- [Developer guide](docs/developer-guide.html) — for engineers extending Gate: the record
+  model, each reader, the engine's rule plan, extension seams, testing.
+
 ## Project layout
 
 | Project | What it is |
