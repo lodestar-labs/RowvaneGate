@@ -66,6 +66,11 @@ public abstract class RuleCheck
     /// <summary>Check-specific structural validation; yield one message per problem.</summary>
     public virtual IEnumerable<string> Validate(RulesetDocument document, EntityShape? entity, Rule rule)
     {
+        if (RequiresField && string.IsNullOrWhiteSpace(rule.Entity))
+        {
+            yield return $"check '{GetType().Name}' requires an 'entity' (field-level checks never run without one).";
+        }
+
         if (RequiresField && string.IsNullOrWhiteSpace(rule.Field))
         {
             yield return $"check '{GetType().Name}' requires a 'field'.";

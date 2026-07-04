@@ -162,8 +162,14 @@ public static class JsonSchemaImporter
             yield return new Rule { Entity = entity, Field = field, Check = new RegexCheck { Pattern = patternValue } };
         }
 
-        decimal? min = ReadNumber(schema, "minimum") ?? ReadNumber(schema, "exclusiveMinimum");
-        decimal? max = ReadNumber(schema, "maximum") ?? ReadNumber(schema, "exclusiveMaximum");
+        // Draft 6+ uses numeric exclusiveMinimum/Maximum; draft 4 pairs a numeric
+        // minimum/maximum with a boolean exclusive flag. Both are honored.
+        var minimum = ReadNumber(schema, "minimum");
+        var maximum = ReadNumber(schema, "maximum");
+        var exclusiveMinimum = ReadNumber(schema, "exclusiveMinimum");
+        var exclusiveMaximum = ReadNumber(schema, "exclusiveMaximum");
+        decimal? min = minimum ?? exclusiveMinimum;
+        decimal? max = maximum ?? exclusiveMaximum;
         if (min is not null || max is not null)
         {
             yield return new Rule
@@ -174,8 +180,8 @@ public static class JsonSchemaImporter
                 {
                     Min = min,
                     Max = max,
-                    ExclusiveMin = schema.TryGetProperty("exclusiveMinimum", out _) && !schema.TryGetProperty("minimum", out _),
-                    ExclusiveMax = schema.TryGetProperty("exclusiveMaximum", out _) && !schema.TryGetProperty("maximum", out _),
+                    ExclusiveMin = (minimum is null && exclusiveMinimum is not null) || IsTrue(schema, "exclusiveMinimum"),
+                    ExclusiveMax = (maximum is null && exclusiveMaximum is not null) || IsTrue(schema, "exclusiveMaximum"),
                 },
             };
         }
@@ -205,6 +211,9 @@ public static class JsonSchemaImporter
                 _ => null,
             }
             : null;
+
+    private static bool IsTrue(JsonElement schema, string property) =>
+        schema.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
 
     private static string? Format(JsonElement schema) =>
         schema.TryGetProperty("format", out var format) ? format.GetString() : null;

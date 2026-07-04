@@ -232,6 +232,11 @@ public sealed class CsvValidationSource : IValidationSource
             {
                 completed = CurrentRoot;
                 CurrentRoot = record;
+
+                // The previous tree is complete; its records must no longer act as
+                // parents, or later records would silently attach to an already-yielded
+                // (and already-validated) subtree.
+                _latest.Clear();
             }
             else
             {
