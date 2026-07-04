@@ -97,6 +97,9 @@ nested XML, or a JSON array.
 
 ## Documentation
 
+- [Validate &amp; import guide](docs/validate-and-import-guide.md) — the comprehensive
+  walkthrough: validation alone, import alone with [Loadstone](https://github.com/KadjiProjects/Loadstone),
+  or both chained into one pipeline.
 - [Ruleset reference](docs/ruleset-reference.md) — every property of the ruleset
   document: shape, source options, all eleven check types, the report format, schema import.
 - [Recipes](docs/recipes.md) — multi-record exchange files, XSD contracts over non-XML
