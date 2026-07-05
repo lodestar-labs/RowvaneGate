@@ -9,7 +9,7 @@ layouts. One declarative **ruleset** describes the data's shape and the rules it
 satisfy; Gate streams the file through and returns a structured report with real line
 numbers, raw values, and per-rule counts.
 
-[![CI](https://github.com/KadjiProjects/RowvaneGate/actions/workflows/ci.yml/badge.svg)](https://github.com/KadjiProjects/RowvaneGate/actions/workflows/ci.yml)
+[![CI](https://github.com/lodestar-labs/RowvaneGate/actions/workflows/ci.yml/badge.svg)](https://github.com/lodestar-labs/RowvaneGate/actions/workflows/ci.yml)
 [![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
 
@@ -45,7 +45,7 @@ validate at the gate, import what passes.
 ## Quick start
 
 ```bash
-git clone https://github.com/KadjiProjects/RowvaneGate.git
+git clone https://github.com/lodestar-labs/RowvaneGate.git
 cd RowvaneGate
 dotnet run --project src/Rowvane.Gate.Api
 ```
@@ -101,7 +101,7 @@ nested XML, or a JSON array.
 ## Documentation
 
 - [Validate &amp; import guide](docs/validate-and-import-guide.md) — the comprehensive
-  walkthrough: validation alone, import alone with [Loadstone](https://github.com/KadjiProjects/Loadstone),
+  walkthrough: validation alone, import alone with [Loadstone](https://github.com/lodestar-labs/Loadstone),
   or both chained into one pipeline.
 - [Ruleset reference](docs/ruleset-reference.md) — every property of the ruleset
   document: shape, source options, all eleven check types, the report format, schema import.

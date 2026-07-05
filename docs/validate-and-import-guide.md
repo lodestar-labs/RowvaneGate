@@ -1,7 +1,7 @@
 # Validate and import: using Rowvane Gate and Loadstone — alone or together
 
-[Rowvane Gate](https://github.com/KadjiProjects/RowvaneGate) and
-[Loadstone](https://github.com/KadjiProjects/Loadstone) are two independent,
+[Rowvane Gate](https://github.com/lodestar-labs/RowvaneGate) and
+[Loadstone](https://github.com/lodestar-labs/Loadstone) are two independent,
 API-first tools built around the same idea: **describe your data once, declaratively,
 and derive everything else.** Each stands alone; together they form a complete inbound
 data pipeline: *validate at the gate, import what passes.*
@@ -29,7 +29,7 @@ supplier's fix-list.
 ### 1.1 Run it
 
 ```bash
-git clone https://github.com/KadjiProjects/RowvaneGate.git
+git clone https://github.com/lodestar-labs/RowvaneGate.git
 cd RowvaneGate
 dotnet run --project src/Rowvane.Gate.Api
 ```
@@ -75,7 +75,7 @@ parent-scoped), `aggregate` (children vs a parent total), `rowCount`, and `sql`
 (a DuckDB query over the whole file). All are conditionable with `when` and carry a
 severity (`info` / `warning` / `error` — only errors make a file invalid). The full
 specification is in the
-[ruleset reference](https://github.com/KadjiProjects/RowvaneGate/blob/main/docs/ruleset-reference.md).
+[ruleset reference](https://github.com/lodestar-labs/RowvaneGate/blob/main/docs/ruleset-reference.md).
 
 Three shortcuts when you don't want to start from a blank page:
 
@@ -138,7 +138,7 @@ fi
 Keep rulesets in git and `PUT` them during deployment — the ruleset *is* the interface
 contract with your data suppliers. More patterns (multi-record bank files, fixed-width
 layouts, SQL rules) are in the
-[recipes](https://github.com/KadjiProjects/RowvaneGate/blob/main/docs/recipes.md).
+[recipes](https://github.com/lodestar-labs/RowvaneGate/blob/main/docs/recipes.md).
 
 ---
 
@@ -149,7 +149,7 @@ layouts, SQL rules) are in the
 The fastest route is Docker (SQL Server included):
 
 ```bash
-git clone https://github.com/KadjiProjects/Loadstone.git
+git clone https://github.com/lodestar-labs/Loadstone.git
 cd Loadstone
 docker compose up --build
 ```
@@ -193,7 +193,7 @@ From this one document Loadstone derives parsing for all three formats, type con
 and validation, staging DDL, the `MERGE` statements (orders upsert on `OrderNumber`,
 lines on `OrderId + LineNumber`), foreign-key wiring, a durable queue named `orders`,
 and the rejection reporting. Full specification: the
-[manifest reference](https://github.com/KadjiProjects/Loadstone/blob/main/docs/manifest-reference.md).
+[manifest reference](https://github.com/lodestar-labs/Loadstone/blob/main/docs/manifest-reference.md).
 
 ### 2.3 Register, create tables, import
 
@@ -375,8 +375,8 @@ stays true), so you can watch a new rule against real deliveries before promotin
 | `GET /health` · `/swagger` | `GET /health` · `/swagger` · dashboard at `/` |
 
 Further reading: Gate's
-[ruleset reference](https://github.com/KadjiProjects/RowvaneGate/blob/main/docs/ruleset-reference.md)
-and [recipes](https://github.com/KadjiProjects/RowvaneGate/blob/main/docs/recipes.md);
+[ruleset reference](https://github.com/lodestar-labs/RowvaneGate/blob/main/docs/ruleset-reference.md)
+and [recipes](https://github.com/lodestar-labs/RowvaneGate/blob/main/docs/recipes.md);
 Loadstone's
-[manifest reference](https://github.com/KadjiProjects/Loadstone/blob/main/docs/manifest-reference.md)
-and [recipes](https://github.com/KadjiProjects/Loadstone/blob/main/docs/recipes.md).
+[manifest reference](https://github.com/lodestar-labs/Loadstone/blob/main/docs/manifest-reference.md)
+and [recipes](https://github.com/lodestar-labs/Loadstone/blob/main/docs/recipes.md).

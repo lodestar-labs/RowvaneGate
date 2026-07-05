@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <Authors>KadjiProjects</Authors>
+    <Authors>Lodestar Labs</Authors>
     <Product>Rowvane Gate</Product>
     <Version>0.1.0</Version>
   </PropertyGroup>
