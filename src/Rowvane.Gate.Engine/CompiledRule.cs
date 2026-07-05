@@ -186,7 +186,18 @@ internal sealed class CompiledRule
                 return null;
             }
 
-            var matches = regex.IsMatch(value);
+            bool matches;
+            try
+            {
+                matches = regex.IsMatch(value);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // A pathological pattern/value combination must produce a finding on this
+                // record, not abort the whole run.
+                return $"Pattern '{check.Pattern}' timed out evaluating this value; the value was not validated.";
+            }
+
             if (check.Negate ? matches : !matches)
             {
                 return check.Negate

@@ -33,6 +33,11 @@ public sealed class ValidationEngine(
         var source = sources.FirstOrDefault(s => string.Equals(s.Format, format, StringComparison.OrdinalIgnoreCase))
             ?? throw new SourceFormatException($"No source reader is registered for format '{format}'.");
 
+        using var activity = GateDiagnostics.ActivitySource.StartActivity("gate.validate");
+        activity?.SetTag("gate.ruleset", ruleset.Name);
+        activity?.SetTag("gate.format", format.ToLowerInvariant());
+        activity?.SetTag("gate.source", sourceName);
+
         var report = new ValidationReport
         {
             Ruleset = ruleset.Name,
@@ -63,6 +68,16 @@ public sealed class ValidationEngine(
 
         stopwatch.Stop();
         report.DurationMs = stopwatch.Elapsed.TotalMilliseconds;
+
+        var rulesetTag = new KeyValuePair<string, object?>("ruleset", ruleset.Name);
+        GateDiagnostics.FilesValidated.Add(1, rulesetTag);
+        GateDiagnostics.RecordsRead.Add(report.RecordsRead, rulesetTag);
+        GateDiagnostics.FindingsRaised.Add(report.ErrorCount, rulesetTag, new("severity", "error"));
+        GateDiagnostics.FindingsRaised.Add(report.WarningCount, rulesetTag, new("severity", "warning"));
+        GateDiagnostics.ValidationDuration.Record(stopwatch.Elapsed.TotalSeconds, rulesetTag);
+        activity?.SetTag("gate.records", report.RecordsRead);
+        activity?.SetTag("gate.errors", report.ErrorCount);
+
         logger.LogInformation(
             "Validated {Source} against {Ruleset}: {Records} records, {Errors} errors, {Warnings} warnings in {ElapsedMs:F0} ms",
             sourceName, ruleset.Name, report.RecordsRead, report.ErrorCount, report.WarningCount, report.DurationMs);
@@ -345,12 +360,24 @@ public sealed class ValidationEngine(
             string? message = null;
             if (check.DeviationPercent is { } deviation)
             {
-                var reference = parentValue == 0 ? 1 : Math.Abs(parentValue);
-                var actualDeviation = Math.Abs(aggregate - parentValue) / reference * 100;
-                if (actualDeviation > deviation)
+                if (parentValue == 0)
                 {
-                    message = $"{check.Function}({check.ChildEntity}.{check.ChildField ?? "*"}) = {aggregate} deviates " +
-                              $"{actualDeviation:F1}% from '{rule.Field}' = {parentValue} (allowed {deviation}%).";
+                    // Percentage deviation is undefined against zero: any nonzero aggregate
+                    // is a violation, rather than measuring against an arbitrary reference.
+                    if (aggregate != 0)
+                    {
+                        message = $"{check.Function}({check.ChildEntity}.{check.ChildField ?? "*"}) = {aggregate} " +
+                                  $"but '{rule.Field}' is 0 (deviation is undefined against zero; the values must both be 0).";
+                    }
+                }
+                else
+                {
+                    var actualDeviation = Math.Abs(aggregate - parentValue) / Math.Abs(parentValue) * 100;
+                    if (actualDeviation > deviation)
+                    {
+                        message = $"{check.Function}({check.ChildEntity}.{check.ChildField ?? "*"}) = {aggregate} deviates " +
+                                  $"{actualDeviation:F1}% from '{rule.Field}' = {parentValue} (allowed {deviation}%).";
+                    }
                 }
             }
             else

@@ -214,12 +214,36 @@ public sealed class CsvValidationSource : IValidationSource
     /// attaches to the most recent record of its parent entity. Returns the previous root
     /// subtree whenever a new root begins (it is complete by definition of the format).
     /// </summary>
-    private sealed class HierarchyAssembler(RulesetDocument ruleset)
+    private sealed class HierarchyAssembler
     {
-        private readonly Dictionary<string, EntityShape?> _parentOf = ruleset.EnumerateEntities()
-            .ToDictionary(e => e.Name, ruleset.FindParent, StringComparer.OrdinalIgnoreCase);
-
+        private readonly Dictionary<string, EntityShape?> _parentOf;
+        private readonly Dictionary<string, string[]> _descendantsOf;
         private readonly Dictionary<string, ValidationRecord> _latest = new(StringComparer.OrdinalIgnoreCase);
+
+        public HierarchyAssembler(RulesetDocument ruleset)
+        {
+            _parentOf = ruleset.EnumerateEntities()
+                .ToDictionary(e => e.Name, ruleset.FindParent, StringComparer.OrdinalIgnoreCase);
+            _descendantsOf = ruleset.EnumerateEntities()
+                .ToDictionary(e => e.Name, Descendants, StringComparer.OrdinalIgnoreCase);
+
+            static string[] Descendants(EntityShape entity)
+            {
+                var names = new List<string>();
+                var queue = new Queue<EntityShape>(entity.Children);
+                while (queue.Count > 0)
+                {
+                    var child = queue.Dequeue();
+                    names.Add(child.Name);
+                    foreach (var grandChild in child.Children)
+                    {
+                        queue.Enqueue(grandChild);
+                    }
+                }
+
+                return [.. names];
+            }
+        }
 
         public ValidationRecord? CurrentRoot { get; private set; }
 
@@ -251,6 +275,15 @@ public sealed class CsvValidationSource : IValidationSource
             }
 
             _latest[record.Entity.Name] = record;
+
+            // A new record closes its own subtree's context: without this, a record placed
+            // after it (e.g. a detail under a *second* branch) would attach to a stale
+            // deeper record left over from the previous sibling branch.
+            foreach (var descendant in _descendantsOf[record.Entity.Name])
+            {
+                _latest.Remove(descendant);
+            }
+
             return completed;
         }
     }

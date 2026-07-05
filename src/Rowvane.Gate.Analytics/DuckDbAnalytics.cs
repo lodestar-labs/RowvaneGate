@@ -8,14 +8,17 @@ namespace Rowvane.Gate.Analytics;
 /// <summary>
 /// Analytical tier backed by embedded DuckDB. Two capabilities:
 /// <para><b>SQL rules</b> — a rule's query runs against the staged file (exposed as the
-/// view <c>data</c>, or via the <c>{file}</c> placeholder); every returned row is a
-/// violation, its columns formatted into the finding message. The escape hatch for any
-/// dataset-level check the declarative rules can't express.</para>
+/// table <c>data</c>); every returned row is a violation, its columns formatted into the
+/// finding message. The escape hatch for any dataset-level check the declarative rules
+/// can't express. By default queries run sandboxed: the file is materialized first and
+/// DuckDB's external access is disabled, so a query can never touch other host files.
+/// The <c>{file}</c> placeholder (direct file access with custom read options) requires
+/// opting out of the sandbox.</para>
 /// <para><b>Profiling</b> — column statistics (<c>SUMMARIZE</c>) for a quick picture of
 /// an unfamiliar file before writing rules for it.</para>
 /// DuckDB reads csv/json/parquet natively; XML files are not supported by this tier.
 /// </summary>
-public sealed class DuckDbAnalytics : IAnalyticsRunner
+public sealed class DuckDbAnalytics(bool allowUnsandboxedSqlRules = false) : IAnalyticsRunner
 {
     private const int MaxViolationRows = 10_000;
 
@@ -33,10 +36,26 @@ public sealed class DuckDbAnalytics : IAnalyticsRunner
         using var connection = new DuckDBConnection("DataSource=:memory:");
         await connection.OpenAsync(cancellationToken);
 
-        using (var createView = connection.CreateCommand())
+        using (var stage = connection.CreateCommand())
         {
-            createView.CommandText = $"CREATE VIEW data AS SELECT * FROM {readFunction}({Quote(filePath)});";
-            await createView.ExecuteNonQueryAsync(cancellationToken);
+            // Materialize the staged file, then lock the sandbox: with external access off,
+            // a rule's query can read the 'data' table but no other file on the host.
+            stage.CommandText = $"CREATE TABLE data AS SELECT * FROM {readFunction}({Quote(filePath)});";
+            await stage.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (!allowUnsandboxedSqlRules)
+        {
+            if (check.Query.Contains("{file}", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new NotSupportedException(
+                    "The {file} placeholder needs direct file access, which sandboxed SQL rules do not allow. " +
+                    "Query the staged 'data' table instead, or enable Gate:AllowUnsandboxedSqlRules.");
+            }
+
+            using var lockdown = connection.CreateCommand();
+            lockdown.CommandText = "SET enable_external_access = false;";
+            await lockdown.ExecuteNonQueryAsync(cancellationToken);
         }
 
         using var command = connection.CreateCommand();

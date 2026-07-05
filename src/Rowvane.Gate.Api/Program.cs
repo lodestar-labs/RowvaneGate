@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Rowvane.Gate.Analytics;
 using Rowvane.Gate.Api;
 using Rowvane.Gate.Engine;
@@ -29,30 +32,93 @@ try
     builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
         options.MultipartBodyLengthLimit = maxUpload);
 
+    // Fail fast on misconfiguration instead of surprising at the first request.
+    builder.Services.AddOptions<GateOptions>()
+        .Validate(o => !string.IsNullOrWhiteSpace(o.RulesetDirectory), "Gate:RulesetDirectory must be set.")
+        .Validate(o => !string.IsNullOrWhiteSpace(o.StagingPath), "Gate:StagingPath must be set.")
+        .Validate(o => o.MaxUploadBytes > 0, "Gate:MaxUploadBytes must be positive.")
+        .Validate(o => o.StagedFileRetention > TimeSpan.Zero, "Gate:StagedFileRetention must be positive.")
+        .ValidateOnStart();
+
     builder.Services.AddSingleton<IValidationSource, CsvValidationSource>();
     builder.Services.AddSingleton<IValidationSource, XmlValidationSource>();
     builder.Services.AddSingleton<IValidationSource, JsonValidationSource>();
-    builder.Services.AddSingleton<IAnalyticsRunner, DuckDbAnalytics>();
-    builder.Services.AddSingleton<DuckDbAnalytics>();
+    builder.Services.AddSingleton(provider => new DuckDbAnalytics(
+        provider.GetRequiredService<IOptions<GateOptions>>().Value.AllowUnsandboxedSqlRules));
+    builder.Services.AddSingleton<IAnalyticsRunner>(provider => provider.GetRequiredService<DuckDbAnalytics>());
     builder.Services.AddSingleton<ValidationEngine>();
-    builder.Services.AddSingleton<IRulesetRegistry, RulesetRegistry>();
+    // Store-backed: replicas sharing the ruleset volume pick up each other's changes.
+    builder.Services.AddSingleton<IRulesetRegistry, StoreBackedRulesetRegistry>();
     builder.Services.AddSingleton(provider => new RulesetDirectoryStore(
         provider.GetRequiredService<IOptions<GateOptions>>().Value.RulesetDirectory,
         provider.GetRequiredService<ILogger<RulesetDirectoryStore>>()));
     builder.Services.AddHostedService<GateInitializer>();
+    builder.Services.AddHostedService<StagingSweeper>();
 
-    builder.Services.AddHealthChecks();
+    builder.Services.AddProblemDetails();
+    builder.Services.AddHealthChecks()
+        .AddCheck<StagingWritableHealthCheck>("staging", tags: ["ready"]);
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
 
+    var otel = builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService("rowvane-gate"))
+        .WithTracing(tracing => tracing
+            .AddAspNetCoreInstrumentation()
+            .AddSource(GateDiagnostics.SourceName))
+        .WithMetrics(metrics => metrics
+            .AddAspNetCoreInstrumentation()
+            .AddRuntimeInstrumentation()
+            .AddMeter(GateDiagnostics.SourceName));
+
+    // Any OTLP backend is one env var away: set OTEL_EXPORTER_OTLP_ENDPOINT.
+    if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+    {
+        otel.WithTracing(tracing => tracing.AddOtlpExporter())
+            .WithMetrics(metrics => metrics.AddOtlpExporter());
+    }
+
     var app = builder.Build();
+    // Unhandled exceptions become RFC 7807 problem responses instead of bare 500s.
+    app.UseExceptionHandler();
     app.UseSerilogRequestLogging();
     app.UseSwagger();
     app.UseSwaggerUI(ui => ui.DocumentTitle = "Rowvane Gate API");
 
+    // Opt-in shared-secret gate for the API surface. Comparison is constant-time.
+    var apiKey = app.Services.GetRequiredService<IOptions<GateOptions>>().Value.ApiKey;
+    if (!string.IsNullOrEmpty(apiKey))
+    {
+        var expected = System.Text.Encoding.UTF8.GetBytes(apiKey);
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api")
+                && (!context.Request.Headers.TryGetValue("X-Api-Key", out var supplied)
+                    || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                        System.Text.Encoding.UTF8.GetBytes(supplied.ToString()), expected)))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Missing or invalid X-Api-Key header." });
+                return;
+            }
+
+            await next();
+        });
+    }
+
     MapRulesetEndpoints(app);
     MapValidationEndpoints(app);
     app.MapHealthChecks("/health");
+    // Liveness must not depend on anything external; readiness verifies the staging
+    // directory is writable before traffic is routed here.
+    app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = _ => false,
+    });
+    app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready"),
+    });
     app.MapGet("/", () => Results.Redirect("/swagger")).ExcludeFromDescription();
 
     app.Run();

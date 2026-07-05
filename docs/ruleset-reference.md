@@ -235,6 +235,12 @@ Keys are case-insensitive; a record whose key fields are all missing is not chec
 { "type": "unique", "fields": [ "HaulNo" ], "scope": "parent" }
 ```
 
+Memory note: `dataset`-scoped uniqueness keeps one key string per distinct value for the
+whole run, so it grows with the file's cardinality — roughly (key length + overhead) ×
+distinct rows. For files in the tens of millions of rows, prefer a `sql` rule
+(`GROUP BY ... HAVING count(*) > 1`), which checks the same thing inside DuckDB without
+holding keys in process memory.
+
 ### `aggregate`
 
 Aggregates a child entity's field per parent record and compares it against the parent's
@@ -252,6 +258,9 @@ own `field` — exactly (`op`) or within a percentage tolerance (`deviationPerce
 { "type": "aggregate", "childEntity": "HL", "childField": "Weight",
   "function": "sum", "deviationPercent": 5 }
 ```
+
+When the parent value is `0`, percentage deviation is undefined: any nonzero aggregate
+is a violation, and a zero aggregate passes.
 
 ### `rowCount`
 
@@ -271,12 +280,20 @@ json, and parquet staged files (not XML).
 
 | Property | Description |
 | --- | --- |
-| `query` | The query. The staged file is exposed as the view `data`; the literal `{file}` is replaced with the quoted staged-file path. |
+| `query` | The query. The staged file is exposed as the table `data`. |
 
 ```json
 { "type": "sql",
   "query": "SELECT TripId, COUNT(*) AS n FROM data GROUP BY TripId HAVING COUNT(*) > 50" }
 ```
+
+**Sandbox.** SQL rules run sandboxed by default: the staged file is materialized into
+the `data` table first and DuckDB's external file access is then disabled, so a query
+can never read or write any other file on the host. The `{file}` placeholder (direct
+file access with custom read options, e.g.
+`read_csv_auto({file}, header=false)`) therefore requires setting
+`Gate:AllowUnsandboxedSqlRules=true` — only do that when everyone who can register
+rulesets is fully trusted with the host's filesystem.
 
 When analytics is unavailable (or no staged file exists), sql rules degrade to a
 **warning** finding rather than failing the run. A query that errors produces an

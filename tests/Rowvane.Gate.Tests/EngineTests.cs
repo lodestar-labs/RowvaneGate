@@ -177,6 +177,39 @@ public class EngineTests
     }
 
     [Test]
+    public async Task Aggregate_deviation_against_a_zero_parent_flags_any_nonzero_aggregate()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Id = "SUM-DEV",
+            Entity = "TR",
+            Field = "TotalWeight",
+            Check = new AggregateCheck
+            {
+                ChildEntity = "HL",
+                ChildField = "Weight",
+                Function = AggregateFunction.Sum,
+                DeviationPercent = 5,
+            },
+        });
+
+        // Percent deviation is undefined against 0: a zero parent with nonzero children
+        // is a violation; a zero parent with zero children is not.
+        const string file = """
+            TR,T-1,DANA,2026-06-01,0
+            HL,1,OTB,10
+            TR,T-2,HAVKAT,2026-06-02,0
+            HL,1,OTB,0
+            """;
+
+        var report = await Validate(file, ruleset);
+        var finding = report.Findings.Single(f => f.RuleId == "SUM-DEV");
+
+        Assert.That(finding.Line, Is.EqualTo(1), "only the trip whose children sum to a nonzero value");
+    }
+
+    [Test]
     public async Task Required_children_and_row_counts()
     {
         var ruleset = TestData.Trips();

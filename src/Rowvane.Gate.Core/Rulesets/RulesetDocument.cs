@@ -95,6 +95,16 @@ public sealed class RulesetDocument
                 {
                     errors.Add($"Entity '{entity.Name}': duplicate field '{field.Name}'.");
                 }
+
+                if (field.Start is { } start && start < 1)
+                {
+                    errors.Add($"Entity '{entity.Name}', field '{field.Name}': 'start' is 1-based and must be at least 1.");
+                }
+
+                if (field.Length is { } length && length < 1)
+                {
+                    errors.Add($"Entity '{entity.Name}', field '{field.Name}': 'length' must be at least 1.");
+                }
             }
         }
 

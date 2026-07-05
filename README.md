@@ -33,7 +33,10 @@ validate at the gate, import what passes.
   escaped quotes, embedded newlines (RFC 4180).
 - **An analytical tier with an escape hatch.** Embedded DuckDB powers column profiling
   (`POST /api/profile`) and **SQL rules** — any dataset-level check you can express as a
-  query over the staged file, each returned row becoming a finding.
+  query over the staged file, each returned row becoming a finding. SQL rules run
+  **sandboxed** by default: the file is materialized into a `data` table and DuckDB's
+  filesystem access is disabled before the query runs, so a ruleset can never touch
+  other files on the host.
 - **Findings, not strings.** Every violation carries rule id, severity, entity, field,
   line, raw value, and message. Reports include per-rule totals (never truncated) and
   per-entity record counts. Streaming end to end: memory is bounded by one record
@@ -108,6 +111,33 @@ nested XML, or a JSON array.
   streaming validation pass, rule compilation, and the analytics tier.
 - [Developer guide](docs/developer-guide.html) — for engineers extending Gate: the record
   model, each reader, the engine's rule plan, extension seams, testing.
+
+## Running in production
+
+Gate is a single stateless-ish container: the only state is the ruleset directory and a
+staging area for in-flight uploads.
+
+- **Health probes** — `/health/live` (process up; never depends on anything external)
+  and `/health/ready` (staging directory writable). Wire liveness and readiness to these
+  respectively; plain `/health` combines everything.
+- **Scaling out** — point `Gate__RulesetDirectory` at a shared volume (App Service
+  `%HOME%\data`, a Kubernetes RWX volume): replicas read through to it, so a ruleset
+  registered or updated on one replica is picked up by the others on their next lookup,
+  no restart needed. Without a shared volume, run a single replica.
+- **Authentication** — set `Gate__ApiKey` to require an `X-Api-Key` header on every
+  `/api` request. Without it, run Gate only behind an authenticating gateway: ruleset
+  registration is a privileged operation (SQL rules run queries on the host, sandboxed
+  or not).
+- **Upload limits** — Gate accepts up to `Gate__MaxUploadBytes` (default 2 GB), but your
+  ingress usually caps far lower (nginx defaults to 1 MB). Raise
+  `proxy-body-size`/`client_max_body_size` alongside it or uploads die at the proxy with
+  an opaque 413.
+- **Housekeeping** — staged uploads are deleted after validation and a background
+  sweeper removes anything older than `Gate__StagedFileRetention` (default 1 h), so
+  crashes can't slowly fill the disk.
+- **Telemetry** — set `OTEL_EXPORTER_OTLP_ENDPOINT` and traces + metrics (files
+  validated, records read, findings by severity, validation duration) flow to any OTLP
+  backend: Azure Monitor, Grafana, Jaeger, Datadog.
 
 ## Project layout
 

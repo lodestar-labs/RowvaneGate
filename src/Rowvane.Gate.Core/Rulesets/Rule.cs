@@ -149,6 +149,34 @@ public sealed class RegexCheck : RuleCheck
     public required string Pattern { get; set; }
 
     public bool Negate { get; set; }
+
+    public override IEnumerable<string> Validate(RulesetDocument document, EntityShape? entity, Rule rule)
+    {
+        foreach (var problem in base.Validate(document, entity, rule))
+        {
+            yield return problem;
+        }
+
+        // Compile here so a bad pattern is rejected once, at registration — not as a 500
+        // on every file validated against the ruleset afterwards.
+        string? error = null;
+        try
+        {
+            _ = new System.Text.RegularExpressions.Regex(
+                Pattern,
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+                TimeSpan.FromSeconds(2));
+        }
+        catch (ArgumentException ex)
+        {
+            error = $"regex pattern '{Pattern}' is invalid: {ex.Message}";
+        }
+
+        if (error is not null)
+        {
+            yield return error;
+        }
+    }
 }
 
 /// <summary>Value must be one of (or none of) a set of allowed values.</summary>

@@ -67,4 +67,39 @@ public class AnalyticsTests
         Assert.ThrowsAsync<NotSupportedException>(() =>
             analytics.RunSqlCheckAsync(_csvPath, "xml", TestData.Trips(), new SqlCheck { Query = "SELECT 1" }));
     }
+
+    [Test]
+    public void Sandboxed_sql_rules_cannot_read_other_host_files()
+    {
+        var analytics = new DuckDbAnalytics();
+        var check = new SqlCheck { Query = $"SELECT * FROM read_csv_auto('{_csvPath.Replace("'", "''")}')" };
+
+        // The staged file itself was materialized into 'data'; with external access
+        // locked, even re-reading that same path must fail — as must any other file.
+        Assert.ThrowsAsync<DuckDB.NET.Data.DuckDBException>(() =>
+            analytics.RunSqlCheckAsync(_csvPath, "csv", TestData.Trips(), check));
+    }
+
+    [Test]
+    public void File_placeholder_requires_the_unsandboxed_opt_in()
+    {
+        var analytics = new DuckDbAnalytics();
+        var check = new SqlCheck { Query = "SELECT * FROM read_csv_auto({file})" };
+
+        var ex = Assert.ThrowsAsync<NotSupportedException>(() =>
+            analytics.RunSqlCheckAsync(_csvPath, "csv", TestData.Trips(), check));
+        Assert.That(ex!.Message, Does.Contain("AllowUnsandboxedSqlRules"));
+    }
+
+    [Test]
+    public async Task Unsandboxed_mode_still_supports_the_file_placeholder()
+    {
+        var analytics = new DuckDbAnalytics(allowUnsandboxedSqlRules: true);
+        var check = new SqlCheck { Query = "SELECT TripId FROM read_csv_auto({file}) WHERE Weight < 0" };
+
+        var violations = await analytics.RunSqlCheckAsync(_csvPath, "csv", TestData.Trips(), check);
+
+        Assert.That(violations, Has.Count.EqualTo(1));
+        Assert.That(violations[0], Does.Contain("T-3"));
+    }
 }

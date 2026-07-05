@@ -98,4 +98,92 @@ public class RegressionTests
             Assert.That(roots[24].Get("TripId"), Is.EqualTo("T-25"));
         });
     }
+
+    /// <summary>TR → HL → SA → SD, four levels — deep enough to expose stale-branch bugs.</summary>
+    private static RulesetDocument FourLevels()
+    {
+        var ruleset = TestData.Trips();
+        var sample = ruleset.Shape.Children[0].Children[0];
+        sample.Children.Add(new EntityShape
+        {
+            Name = "SD",
+            Fields = [new FieldShape { Name = "RecordType" }, new FieldShape { Name = "DetailNo" }],
+        });
+        return ruleset;
+    }
+
+    [Test]
+    public void Record_after_a_new_sibling_branch_cannot_attach_to_the_previous_branch()
+    {
+        // SD's parent entity is SA, but the only SA belongs to haul 1 — a *sibling branch*
+        // already closed when HL,2 began. Attaching there would validate SD against the
+        // wrong parents (wrong parent.* comparisons and aggregates) with no error at all.
+        const string file = """
+            TR,T-1,DANA,2026-06-01,100
+            HL,1,OTB,10
+            SA,COD,1
+            HL,2,PTM,20
+            SD,1
+            """;
+
+        Assert.ThrowsAsync<SourceFormatException>(async () =>
+            await TestData.ReadAll(new CsvValidationSource(), file, FourLevels()));
+    }
+
+    [Test]
+    public async Task Four_level_hierarchies_assemble_correctly()
+    {
+        const string file = """
+            TR,T-1,DANA,2026-06-01,100
+            HL,1,OTB,10
+            SA,COD,1
+            SD,1
+            HL,2,PTM,20
+            SA,HER,2
+            SD,2
+            """;
+
+        var roots = await TestData.ReadAll(new CsvValidationSource(), file, FourLevels());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(roots, Has.Count.EqualTo(1));
+            var hauls = roots[0].Children;
+            Assert.That(hauls, Has.Count.EqualTo(2));
+            Assert.That(hauls[0].Children.Single().Children.Single().Get("DetailNo"), Is.EqualTo("1"));
+            Assert.That(hauls[1].Children.Single().Children.Single().Get("DetailNo"), Is.EqualTo("2"));
+        });
+    }
+
+    [Test]
+    public void Invalid_regex_pattern_is_rejected_at_registration()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Entity = "TR",
+            Field = "TripId",
+            Check = new RegexCheck { Pattern = "(" },
+        });
+
+        // A pattern .NET cannot compile must fail once, here — not as a 500 on every
+        // validation that touches the ruleset afterwards.
+        Assert.That(ruleset.Validate(), Has.Some.Contains("regex"));
+    }
+
+    [Test]
+    public void Fixed_width_start_and_length_must_be_at_least_one()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Shape.Fields[1].Start = 0;
+        ruleset.Shape.Fields[1].Length = 0;
+
+        var errors = ruleset.Validate();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(errors, Has.Some.Contains("'start' is 1-based"));
+            Assert.That(errors, Has.Some.Contains("'length' must be at least 1"));
+        });
+    }
 }
