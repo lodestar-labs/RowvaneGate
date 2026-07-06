@@ -210,3 +210,38 @@ public class XmlJsonSourceTests
         Assert.That(roots.Single().Children.Single().Children.Single().Get("Species"), Is.EqualTo("COD"));
     }
 }
+
+[TestFixture]
+public class EmptyValueNormalizationTests
+{
+    // Every format must agree on what "no value" means: an empty JSON string, an empty XML
+    // attribute, an empty XML element, and an empty CSV cell all coerce to null, so the
+    // same record produces the same findings regardless of the format it arrived in.
+
+    [Test]
+    public async Task Empty_json_string_is_null()
+    {
+        const string json = """[ { "tripId": "", "vessel": "DANA" } ]""";
+        var roots = await TestData.ReadAll(new JsonValidationSource(), json, TestData.Trips());
+
+        Assert.That(roots.Single().Get("TripId"), Is.Null);
+    }
+
+    [Test]
+    public async Task Empty_xml_attribute_is_null()
+    {
+        const string xml = """<File><TR TripId="" Vessel="DANA"><HL><HaulNo>1</HaulNo></HL></TR></File>""";
+        var roots = await TestData.ReadAll(new XmlValidationSource(), xml, TestData.Trips());
+
+        Assert.That(roots.Single().Get("TripId"), Is.Null);
+    }
+
+    [Test]
+    public async Task Empty_xml_element_is_null()
+    {
+        const string xml = "<File><TR><TripId></TripId><Vessel>DANA</Vessel><HL><HaulNo>1</HaulNo></HL></TR></File>";
+        var roots = await TestData.ReadAll(new XmlValidationSource(), xml, TestData.Trips());
+
+        Assert.That(roots.Single().Get("TripId"), Is.Null);
+    }
+}

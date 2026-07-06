@@ -91,10 +91,14 @@ public sealed class ValidationEngine(
         string? stagedFilePath,
         CancellationToken cancellationToken)
     {
-        foreach (var rule in plan.SqlRules)
+        if (plan.SqlRules.Count == 0)
         {
-            var check = (SqlCheck)rule.Check;
-            if (_analytics is null || stagedFilePath is null)
+            return;
+        }
+
+        if (_analytics is null || stagedFilePath is null)
+        {
+            foreach (var rule in plan.SqlRules)
             {
                 report.Add(new Finding(
                     rule.Id!, Severity.Warning, rule.Entity ?? "(dataset)", null, null, null, null,
@@ -102,23 +106,45 @@ public sealed class ValidationEngine(
                         ? "SQL rule skipped: the analytics engine is not enabled."
                         : "SQL rule skipped: no staged file was available."),
                     ruleset.MaxFindingsPerRule);
-                continue;
             }
 
-            IReadOnlyList<string> violations;
-            try
-            {
-                violations = await _analytics.RunSqlCheckAsync(stagedFilePath, report.Format, ruleset, check, cancellationToken);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            return;
+        }
+
+        // One batched call: the runner materializes the staged file once and executes every
+        // rule's query against it, instead of re-parsing the file per rule.
+        var checks = plan.SqlRules.Select(rule => (SqlCheck)rule.Check).ToList();
+        IReadOnlyList<SqlCheckOutcome> outcomes;
+        try
+        {
+            outcomes = await _analytics.RunSqlChecksAsync(stagedFilePath, report.Format, ruleset, checks, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Staging itself failed (unsupported format, unreadable file) — it would have
+            // failed identically for every rule.
+            foreach (var rule in plan.SqlRules)
             {
                 report.Add(new Finding(
                     rule.Id!, Severity.Error, rule.Entity ?? "(dataset)", null, null, null, null,
                     $"SQL rule failed to execute: {ex.Message}"), ruleset.MaxFindingsPerRule);
+            }
+
+            return;
+        }
+
+        for (var i = 0; i < plan.SqlRules.Count; i++)
+        {
+            var rule = plan.SqlRules[i];
+            if (outcomes[i].Error is { } error)
+            {
+                report.Add(new Finding(
+                    rule.Id!, Severity.Error, rule.Entity ?? "(dataset)", null, null, null, null,
+                    $"SQL rule failed to execute: {error}"), ruleset.MaxFindingsPerRule);
                 continue;
             }
 
-            foreach (var message in violations)
+            foreach (var message in outcomes[i].Violations!)
             {
                 report.Add(new Finding(
                     rule.Id!, rule.Severity, rule.Entity ?? "(dataset)", null, null, null, null,

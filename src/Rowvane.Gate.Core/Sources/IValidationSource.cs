@@ -47,4 +47,38 @@ public interface IAnalyticsRunner
         RulesetDocument ruleset,
         SqlCheck check,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Executes several sql checks against the same staged file, returning one outcome per
+    /// check, index-aligned. A check that fails reports its error in the outcome instead of
+    /// throwing, so one bad query cannot stop the others. The default implementation calls
+    /// <see cref="RunSqlCheckAsync"/> per check; implementations that pay a per-call
+    /// materialization cost should override to stage the file once.
+    /// </summary>
+    async Task<IReadOnlyList<SqlCheckOutcome>> RunSqlChecksAsync(
+        string filePath,
+        string format,
+        RulesetDocument ruleset,
+        IReadOnlyList<SqlCheck> checks,
+        CancellationToken cancellationToken = default)
+    {
+        var outcomes = new List<SqlCheckOutcome>(checks.Count);
+        foreach (var check in checks)
+        {
+            try
+            {
+                outcomes.Add(new SqlCheckOutcome(
+                    await RunSqlCheckAsync(filePath, format, ruleset, check, cancellationToken), null));
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                outcomes.Add(new SqlCheckOutcome(null, ex.Message));
+            }
+        }
+
+        return outcomes;
+    }
 }
+
+/// <summary>One sql check's result: its violation messages, or the error that stopped it.</summary>
+public sealed record SqlCheckOutcome(IReadOnlyList<string>? Violations, string? Error);

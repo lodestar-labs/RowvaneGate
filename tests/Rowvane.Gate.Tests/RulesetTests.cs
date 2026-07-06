@@ -102,3 +102,68 @@ public class RulesetTests
         Assert.That(ruleset.Validate(), Has.Some.Contains("unique"));
     }
 }
+
+[TestFixture]
+public class SilentNoOpGuardTests
+{
+    [Test]
+    public void Mistyped_compare_otherField_is_rejected_at_registration()
+    {
+        // A typo'd otherField resolves null on every record at run time — a rule that
+        // silently never fires. Registration must catch it.
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Entity = "HL",
+            Field = "Weight",
+            Check = new CompareCheck { Op = CompareOp.Le, OtherField = "parent.TotalWiehgt" },
+        });
+
+        var errors = ruleset.Validate();
+
+        Assert.That(errors, Has.Some.Contains("'TotalWiehgt' does not exist on entity 'TR'"));
+    }
+
+    [Test]
+    public void Valid_parent_climbing_otherField_passes()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Entity = "HL",
+            Field = "Weight",
+            Check = new CompareCheck { Op = CompareOp.Le, OtherField = "parent.TotalWeight" },
+        });
+
+        Assert.That(ruleset.Validate(), Is.Empty);
+    }
+
+    [Test]
+    public void OtherField_climbing_above_the_root_is_rejected()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Entity = "TR",
+            Field = "TotalWeight",
+            Check = new CompareCheck { Op = CompareOp.Ge, OtherField = "parent.Anything" },
+        });
+
+        Assert.That(ruleset.Validate(), Has.Some.Contains("climbs above the root entity"));
+    }
+
+    [Test]
+    public void Mistyped_when_condition_field_is_rejected_at_registration()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Entity = "TR",
+            Field = "TotalWeight",
+            When = new RuleCondition { Field = "Statsu", OneOf = ["landed"] },
+            Check = new RequiredCheck(),
+        });
+
+        Assert.That(ruleset.Validate(), Has.Some.Contains("when.field 'Statsu' does not exist"));
+    }
+}

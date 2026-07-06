@@ -110,7 +110,11 @@ public sealed class TypeCheck : RuleCheck
     public string? Format { get; set; }
 }
 
-/// <summary>Numeric or date range. Bounds are inclusive unless marked exclusive.</summary>
+/// <summary>
+/// Numeric range; bounds are inclusive unless marked exclusive. For date bounds, use a
+/// dataType check for the format plus a compare check against a literal — range bounds
+/// are decimals and do not parse dates.
+/// </summary>
 public sealed class RangeCheck : RuleCheck
 {
     public decimal? Min { get; set; }
@@ -227,6 +231,29 @@ public sealed class CompareCheck : RuleCheck
         if (Value is null && OtherField is null)
         {
             yield return "compare check requires 'value' or 'otherField'.";
+        }
+
+        // Resolve otherField against the shape now, exactly as the engine will at run time
+        // ("Field", "parent.Field", "parent.parent.Field", …). A typo here would otherwise
+        // register clean and resolve null on every record — a rule that silently never fires.
+        if (OtherField is not null && entity is not null)
+        {
+            var target = entity;
+            var remaining = OtherField;
+            while (target is not null && remaining.StartsWith("parent.", StringComparison.OrdinalIgnoreCase))
+            {
+                target = document.FindParent(target);
+                remaining = remaining["parent.".Length..];
+            }
+
+            if (target is null)
+            {
+                yield return $"otherField '{OtherField}' climbs above the root entity.";
+            }
+            else if (target.FindField(remaining) is null)
+            {
+                yield return $"otherField '{OtherField}': field '{remaining}' does not exist on entity '{target.Name}'.";
+            }
         }
     }
 }

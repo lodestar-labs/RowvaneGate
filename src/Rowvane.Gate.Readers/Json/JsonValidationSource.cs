@@ -125,7 +125,9 @@ public sealed class JsonValidationSource : IValidationSource
     private static string? ReadScalar(JsonElement value) =>
         value.ValueKind switch
         {
-            JsonValueKind.String => value.GetString(),
+            // Empty string coerces to null so `""` validates exactly like an empty CSV cell
+            // or an empty XML element — every format agrees on what "no value" means.
+            JsonValueKind.String => value.GetString() is { Length: > 0 } text ? text : null,
             JsonValueKind.Number => value.GetRawText(),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",

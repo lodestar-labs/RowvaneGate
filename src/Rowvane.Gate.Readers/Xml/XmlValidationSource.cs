@@ -106,7 +106,9 @@ public sealed class XmlValidationSource : IValidationSource
             {
                 if (entity.FindField(reader.LocalName) is { } field)
                 {
-                    record.Fields[field.Name] = reader.Value;
+                    // Same empty-to-null coercion as the element path below: an empty
+                    // attribute must validate identically to an empty element.
+                    record.Fields[field.Name] = string.IsNullOrEmpty(reader.Value) ? null : reader.Value;
                 }
             }
 

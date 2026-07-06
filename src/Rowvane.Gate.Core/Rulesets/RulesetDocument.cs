@@ -132,6 +132,13 @@ public sealed class RulesetDocument
                 continue;
             }
 
+            // A when-condition naming a nonexistent field would never match, silently
+            // disabling the rule — the same rot class as an unknown rule field.
+            if (rule.When is { } when && entity is not null && entity.FindField(when.Field) is null)
+            {
+                errors.Add($"{label}: when.field '{when.Field}' does not exist on entity '{entity.Name}'.");
+            }
+
             foreach (var problem in rule.Check.Validate(this, entity, rule))
             {
                 errors.Add($"{label}: {problem}");

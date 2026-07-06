@@ -480,6 +480,9 @@ public abstract class RuleCheck
     <tr><td><code>Gate:StagingPath</code></td><td><code>data/staging</code></td><td>Where uploads are staged during validation.</td></tr>
     <tr><td><code>Gate:MaxUploadBytes</code></td><td>2&nbsp;GiB</td><td>Kestrel and multipart limits — the endpoint is unauthenticated in v1, so the ceiling is finite on purpose.</td></tr>
     <tr><td><code>Gate:KeepStagedFiles</code></td><td><code>false</code></td><td>Keep staged files after validation (debugging sql rules).</td></tr>
+    <tr><td><code>Gate:StagedFileRetention</code></td><td><code>01:00:00</code></td><td>A background sweeper deletes staged files older than this, so crashes and <code>KeepStagedFiles</code> cannot fill the disk.</td></tr>
+    <tr><td><code>Gate:ApiKey</code></td><td>unset</td><td>When set, every <code>/api</code> request must carry a matching <code>X-Api-Key</code> header (compared in constant time). Unset = open, for private networks.</td></tr>
+    <tr><td><code>Gate:AllowUnsandboxedSqlRules</code></td><td><code>false</code></td><td>Permits the <code>{file}</code> placeholder in sql rules (direct file access with custom read options). Sandboxed rules can read the staged <code>data</code> table but no other host file — leave this off unless a ruleset genuinely needs custom read options.</td></tr>
   </table>
   <p>Logging is Serilog, configured from <code>appsettings.json</code>
   (<code>ReadFrom.Configuration</code>), with a console bootstrap logger for startup

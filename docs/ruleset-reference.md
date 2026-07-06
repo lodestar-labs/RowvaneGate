@@ -48,8 +48,11 @@ case-insensitive everywhere.
 
 Values are kept as **raw strings** exactly as the file carried them (a JSON number keeps
 its literal text). Blank values become null; a missing value and a blank value are the
-same thing to every check. Type conversion never happens implicitly — a `dataType` check
-*verifies* parseability, it does not convert.
+same thing to every check, **identically in every format**: an empty CSV cell, an empty
+fixed-width slice, an empty XML element, an empty XML attribute, and an empty JSON string
+(`""`) all count as absent — so the only check an absent value can fail is `required`.
+Type conversion never happens implicitly — a `dataType` check *verifies* parseability,
+it does not convert.
 
 ## Source options
 
@@ -68,6 +71,12 @@ same thing to every check. Type conversion never happens implicitly — a `dataT
 
 - **single** — one record type per file. Columns map by header row, or positionally by
   the shape's field order when there is no header.
+
+  > **Header caveat:** with a header row, fields are keyed by the **file's** header
+  > names, not the shape's. If the file's headers differ from the shape's field names
+  > (`trip_id` vs `TripId`), every field-level rule resolves no value and passes
+  > silently. Either make the shape's field names match the file's headers, or ship
+  > headerless files and map positionally.
 - **multiRecord** — every line announces its record type in a discriminator column
   (bank files, mainframe extracts, the RDBES exchange format). The hierarchy is
   reconstructed from record order: each record attaches to the most recent record of its
@@ -296,9 +305,14 @@ file access with custom read options, e.g.
 rulesets is fully trusted with the host's filesystem.
 
 When analytics is unavailable (or no staged file exists), sql rules degrade to a
-**warning** finding rather than failing the run. A query that errors produces an
-**error** finding with the engine's message. At most 10 000 violation rows are read per
-rule.
+**warning** finding rather than failing the run — which means the report's `valid` flag
+(errors == 0) can be true even though the sql rules never executed. The shipped API host
+always registers the analytics engine, so this only affects library consumers who
+assemble their own engine; if your pipeline gates on `valid`, also check the report for
+"SQL rule skipped" warnings. A query that errors produces an **error** finding with the
+engine's message. At most 10 000 violation rows are read per rule. All of a run's sql
+rules execute against a single materialization of the staged file, each isolated in a
+rolled-back transaction.
 
 ## The validation report
 

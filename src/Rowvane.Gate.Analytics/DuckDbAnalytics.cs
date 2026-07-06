@@ -29,35 +29,120 @@ public sealed class DuckDbAnalytics(bool allowUnsandboxedSqlRules = false) : IAn
         SqlCheck check,
         CancellationToken cancellationToken = default)
     {
+        using var connection = await OpenWithStagedDataAsync(filePath, format, cancellationToken);
+        GuardSandbox(check);
+        return await ExecuteCheckAsync(connection, check, filePath, cancellationToken);
+    }
+
+    /// <summary>
+    /// The batched path the engine uses: the staged file is materialized (and the sandbox
+    /// locked) once, and every check runs against that one <c>data</c> table — N rules no
+    /// longer mean N full parses of the file. Each check runs inside a rolled-back
+    /// transaction so one rule's query cannot mutate what the next rule sees, preserving
+    /// the isolation the connection-per-check path had.
+    /// </summary>
+    public async Task<IReadOnlyList<SqlCheckOutcome>> RunSqlChecksAsync(
+        string filePath,
+        string format,
+        RulesetDocument ruleset,
+        IReadOnlyList<SqlCheck> checks,
+        CancellationToken cancellationToken = default)
+    {
+        if (checks.Count == 0)
+        {
+            return [];
+        }
+
+        using var connection = await OpenWithStagedDataAsync(filePath, format, cancellationToken);
+        var outcomes = new List<SqlCheckOutcome>(checks.Count);
+        foreach (var check in checks)
+        {
+            try
+            {
+                GuardSandbox(check);
+                await ExecuteStatementAsync(connection, "BEGIN TRANSACTION;", cancellationToken);
+                try
+                {
+                    outcomes.Add(new SqlCheckOutcome(
+                        await ExecuteCheckAsync(connection, check, filePath, cancellationToken), null));
+                }
+                finally
+                {
+                    try
+                    {
+                        await ExecuteStatementAsync(connection, "ROLLBACK;", CancellationToken.None);
+                    }
+                    catch
+                    {
+                        // No transaction left to roll back (the query committed or aborted it).
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                outcomes.Add(new SqlCheckOutcome(null, ex.Message));
+            }
+        }
+
+        return outcomes;
+    }
+
+    /// <summary>
+    /// Opens an in-memory connection, materializes the staged file as the <c>data</c>
+    /// table, and — unless unsandboxed rules are allowed — disables external access so a
+    /// rule's query can read the table but no other file on the host.
+    /// </summary>
+    private async Task<DuckDBConnection> OpenWithStagedDataAsync(
+        string filePath, string format, CancellationToken cancellationToken)
+    {
         var readFunction = ReadFunctionFor(format)
             ?? throw new NotSupportedException(
                 $"SQL rules read the staged file with DuckDB, which supports csv, json, and parquet — not '{format}'.");
 
-        using var connection = new DuckDBConnection("DataSource=:memory:");
-        await connection.OpenAsync(cancellationToken);
-
-        using (var stage = connection.CreateCommand())
+        var connection = new DuckDBConnection("DataSource=:memory:");
+        try
         {
-            // Materialize the staged file, then lock the sandbox: with external access off,
-            // a rule's query can read the 'data' table but no other file on the host.
-            stage.CommandText = $"CREATE TABLE data AS SELECT * FROM {readFunction}({Quote(filePath)});";
-            await stage.ExecuteNonQueryAsync(cancellationToken);
-        }
+            await connection.OpenAsync(cancellationToken);
+            await ExecuteStatementAsync(
+                connection,
+                $"CREATE TABLE data AS SELECT * FROM {readFunction}({Quote(filePath)});",
+                cancellationToken);
 
-        if (!allowUnsandboxedSqlRules)
-        {
-            if (check.Query.Contains("{file}", StringComparison.OrdinalIgnoreCase))
+            if (!allowUnsandboxedSqlRules)
             {
-                throw new NotSupportedException(
-                    "The {file} placeholder needs direct file access, which sandboxed SQL rules do not allow. " +
-                    "Query the staged 'data' table instead, or enable Gate:AllowUnsandboxedSqlRules.");
+                await ExecuteStatementAsync(connection, "SET enable_external_access = false;", cancellationToken);
             }
 
-            using var lockdown = connection.CreateCommand();
-            lockdown.CommandText = "SET enable_external_access = false;";
-            await lockdown.ExecuteNonQueryAsync(cancellationToken);
+            return connection;
         }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
+    }
 
+    private void GuardSandbox(SqlCheck check)
+    {
+        if (!allowUnsandboxedSqlRules && check.Query.Contains("{file}", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException(
+                "The {file} placeholder needs direct file access, which sandboxed SQL rules do not allow. " +
+                "Query the staged 'data' table instead, or enable Gate:AllowUnsandboxedSqlRules.");
+        }
+    }
+
+    private static async Task ExecuteStatementAsync(
+        DuckDBConnection connection, string sql, CancellationToken cancellationToken)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task<IReadOnlyList<string>> ExecuteCheckAsync(
+        DuckDBConnection connection, SqlCheck check, string filePath, CancellationToken cancellationToken)
+    {
         using var command = connection.CreateCommand();
         command.CommandText = check.Query.Replace("{file}", Quote(filePath), StringComparison.OrdinalIgnoreCase);
 
