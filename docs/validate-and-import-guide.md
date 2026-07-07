@@ -1,3 +1,7 @@
+---
+title: Validate & import guide
+---
+
 # Validate and import: using Rowvane Gate and Loadstone — alone or together
 
 [Rowvane Gate](https://github.com/lodestar-labs/RowvaneGate) and

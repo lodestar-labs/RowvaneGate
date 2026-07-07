@@ -226,8 +226,22 @@ public static class JsonSchemaImporter
                 ? parsed
                 : null;
 
-    private static int? ReadInt(JsonElement schema, string property) =>
-        schema.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number
-            ? value.GetInt32()
-            : null;
+    private static int? ReadInt(JsonElement schema, string property)
+    {
+        if (!schema.TryGetProperty(property, out var value) || value.ValueKind != JsonValueKind.Number)
+        {
+            return null;
+        }
+
+        // GetInt32() throws FormatException on 5.5 or 1e10, which escaped the import
+        // endpoint as a 500. A non-integer facet is a schema problem the caller should
+        // see as a clean import error instead.
+        if (!value.TryGetInt32(out var parsed))
+        {
+            throw new RulesetException(
+                $"JSON Schema facet '{property}' must be a whole number within Int32 range; got '{value.GetRawText()}'.");
+        }
+
+        return parsed;
+    }
 }

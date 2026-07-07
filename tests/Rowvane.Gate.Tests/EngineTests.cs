@@ -112,6 +112,56 @@ public class EngineTests
     }
 
     [Test]
+    public async Task Numeric_compare_never_falls_back_to_string_comparison()
+    {
+        // "1,000" does not parse as a number (no thousands separators in NumberStyles.Float).
+        // Ordinal string comparison would call it LESS than "100" and pass the check silently
+        // - a missed violation on exactly the dirty data a gate exists to catch. It must be
+        // its own finding instead.
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Id = "W-MAX",
+            Entity = "HL",
+            Field = "Weight",
+            Check = new CompareCheck { Op = CompareOp.Le, Value = "100" },
+        });
+
+        const string file = """
+            TR,T-1,DANA,2026-06-01,10
+            HL,1,OTB,"1,000"
+            """;
+
+        var report = await Validate(file, ruleset);
+        var finding = report.Findings.Single(f => f.RuleId == "W-MAX");
+
+        Assert.That(finding.Message, Does.Contain("not numeric"));
+    }
+
+    [Test]
+    public async Task Numeric_compare_with_parseable_value_still_compares_numerically()
+    {
+        var ruleset = TestData.Trips();
+        ruleset.Rules.Add(new Rule
+        {
+            Id = "W-MAX",
+            Entity = "HL",
+            Field = "Weight",
+            Check = new CompareCheck { Op = CompareOp.Le, Value = "100" },
+        });
+
+        const string file = """
+            TR,T-1,DANA,2026-06-01,10
+            HL,1,OTB,1000
+            HL,2,OTB,90
+            """;
+
+        var report = await Validate(file, ruleset);
+
+        Assert.That(report.Findings.Count(f => f.RuleId == "W-MAX"), Is.EqualTo(1), "only 1000 > 100");
+    }
+
+    [Test]
     public async Task Uniqueness_dataset_and_parent_scoped()
     {
         var ruleset = TestData.Trips();

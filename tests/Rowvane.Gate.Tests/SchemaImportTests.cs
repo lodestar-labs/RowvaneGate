@@ -142,3 +142,29 @@ public class JsonSchemaImporterTests
         });
     }
 }
+
+[TestFixture]
+public class JsonSchemaFacetTests
+{
+    [Test]
+    public void Non_integer_length_facet_is_a_clean_import_error()
+    {
+        // GetInt32() used to throw FormatException here, escaping the import endpoint as
+        // an opaque 500. It must be a RulesetException (the endpoint's 400 shape).
+        const string schema = """
+            { "type": "object", "properties": { "name": { "type": "string", "minLength": 5.5 } } }
+            """;
+
+        Assert.Throws<RulesetException>(() => JsonSchemaImporter.Import(schema, "bad-facet", "Rec"));
+    }
+
+    [Test]
+    public void Overflowing_length_facet_is_a_clean_import_error()
+    {
+        const string schema = """
+            { "type": "object", "properties": { "name": { "type": "string", "maxLength": 1e10 } } }
+            """;
+
+        Assert.Throws<RulesetException>(() => JsonSchemaImporter.Import(schema, "bad-facet", "Rec"));
+    }
+}

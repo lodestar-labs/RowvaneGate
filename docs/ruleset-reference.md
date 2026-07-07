@@ -1,3 +1,7 @@
+---
+title: Ruleset reference
+---
+
 # Ruleset reference
 
 A ruleset is a JSON document that fully describes one validation: the **shape** of the
@@ -121,7 +125,7 @@ literal text; `null` is a missing value. Findings carry a JSONPath-style `path`
 | Property | Type | Default | Description |
 | --- | --- | --- | --- |
 | `id` | string | auto | Stable identifier used in findings. Auto-assigned (`R001`, `R002`, …) when omitted. |
-| `entity` | string | see note | Target entity. Required for all field-level checks; optional only for `rowCount`/`unique` (which name it anyway) and `sql`. |
+| `entity` | string | see note | Target entity. Required for all field-level checks and for `unique`/`rowCount`; optional only for `sql` (which is dataset-scoped). |
 | `field` | string | – | Target field, for field-level checks. |
 | `severity` | enum | `error` | `info`, `warning`, or `error`. Only errors make the report invalid. |
 | `message` | string | – | Overrides the check's generated message. |
@@ -222,7 +226,9 @@ ancestor.
 | `op` | `eq` | `eq`, `ne`, `lt`, `le`, `gt`, `ge`. |
 | `value` | – | Literal right-hand value. |
 | `otherField` | – | Right-hand field path: `"OtherField"` or `"parent.Field"` — `parent.` may be repeated to climb further. |
-| `numeric` | `true` | Compare numerically when **both** sides parse as numbers; otherwise ordinal string comparison. |
+| `numeric` | `true` | Compare numerically. A side that does not parse as a number is its own finding ("not numeric") — a numeric compare never silently falls back to string comparison. Set `false` for ordinal string comparison. |
+
+`otherField` (including `parent.` climbs) and every `when.field` are resolved against the shape at registration — a typo is a registration error, never a rule that silently does nothing.
 
 ```json
 { "type": "compare", "op": "le", "otherField": "parent.TotalWeight" }

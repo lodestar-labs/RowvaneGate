@@ -268,10 +268,25 @@ internal sealed class CompiledRule
             }
 
             int comparison;
-            if (check.Numeric
-                && decimal.TryParse(left.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber)
-                && decimal.TryParse(right.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber))
+            if (check.Numeric)
             {
+                // A numeric compare must never silently fall back to ordinal string
+                // comparison: "1,000" vs "100" ordinal-compares as LESS (missed violation)
+                // and "$50" vs "9" as LESS (false positive) — exactly the dirty values a
+                // gate exists to catch. An unparseable side is its own finding, mirroring
+                // the range check's behavior.
+                var leftParses = decimal.TryParse(left.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
+                var rightParses = decimal.TryParse(right.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
+                if (!leftParses)
+                {
+                    return $"Value '{left}' is not numeric, so the comparison cannot be checked.";
+                }
+
+                if (!rightParses)
+                {
+                    return $"Comparison reference {rightLabel} is '{right}', which is not numeric, so the comparison cannot be checked.";
+                }
+
                 comparison = leftNumber.CompareTo(rightNumber);
             }
             else

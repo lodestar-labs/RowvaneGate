@@ -1,3 +1,7 @@
+---
+title: Recipes
+---
+
 # Recipes
 
 Practical patterns for the situations Gate was built for. Each recipe is a complete
